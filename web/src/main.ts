@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { CameraRig } from "./cameras";
 import { buildCity } from "./city";
 import { Environment } from "./environment";
+import { Simulation } from "./sim";
+import { buildStreetscape } from "./streetscape";
+import { makeLabelSprite } from "./textures";
 import type { CityData } from "./types";
 import { hideLoading, setupUi, showLoadingError } from "./ui";
 
@@ -31,10 +34,22 @@ async function init(): Promise<void> {
 
   const city = buildCity(data);
   scene.add(city.group);
+  scene.add(buildStreetscape(data, city.lightPositions));
+
+  const sim = new Simulation(data);
+  scene.add(sim.group);
+
+  const stationLabel = makeLabelSprite("自由が丘駅", "Jiyugaoka Sta.");
+  stationLabel.position.set(0, 34, 0);
+  scene.add(stationLabel);
+
   const environment = new Environment(scene, city);
 
   setupUi({
-    onMode: (mode) => rig.setMode(mode),
+    onMode: (mode) => {
+      rig.setMode(mode);
+      stationLabel.visible = mode !== "ground";
+    },
     onTime: (time) => environment.apply(time),
     onJoystick: (x, y) => rig.setJoystick(x, y),
   });
@@ -53,9 +68,12 @@ async function init(): Promise<void> {
   let fpsTime = performance.now();
 
   const clock = new THREE.Clock();
+  let time = 0;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
+    time += dt;
     rig.update(dt);
+    sim.update(dt, time);
     renderer.render(scene, rig.camera);
     if (debug) {
       frames++;
