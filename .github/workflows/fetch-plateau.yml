@@ -53,10 +53,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No data changes."
           else
-            git commit -m "data: rebuild city.json with PLATEAU LOD1 buildings
-
-出典: 国土交通省 Project PLATEAU 東京都23区 3D都市モデル（編集・加工して使用）
-roads/rails/names: (c) OpenStreetMap contributors (ODbL)"
+            git commit -m "data: rebuild city.json with PLATEAU LOD1 buildings" -m "出典: 国土交通省 Project PLATEAU 東京都23区 3D都市モデル（編集・加工して使用）/ roads, rails, names: (c) OpenStreetMap contributors (ODbL)"
             git pull --rebase
             git push
           fi
