@@ -6,6 +6,12 @@ name: fetch-data
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/jiyugaoka-dev-plan-ig4ycu
+    paths:
+      - "scripts/**"
+      - ".github/workflows/fetch-data.yml"
 
 permissions:
   contents: write
