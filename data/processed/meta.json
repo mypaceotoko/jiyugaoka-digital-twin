@@ -1,0 +1,24 @@
+{
+  "generated": "2026-06-10T15:06:43.354043+00:00",
+  "source": "OpenStreetMap via Overpass API",
+  "instance": "https://overpass-api.de/api/interpreter",
+  "license": "ODbL 1.0 — (c) OpenStreetMap contributors — https://www.openstreetmap.org/copyright",
+  "bbox_swne": [
+    35.60436,
+    139.66513,
+    35.61064,
+    139.67287
+  ],
+  "query": "[out:json][timeout:120][bbox:35.60436,139.66513,35.61064,139.67287];\n(\n  way[\"building\"];\n  relation[\"building\"];\n  way[\"highway\"];\n  way[\"railway\"~\"^(rail|light_rail|platform)$\"];\n  way[\"leisure\"~\"^(park|garden)$\"];\n  way[\"landuse\"~\"^(grass|forest|village_green|recreation_ground)$\"];\n  way[\"natural\"=\"water\"];\n  way[\"waterway\"];\n  node[\"shop\"];\n  node[\"amenity\"];\n  node[\"railway\"=\"station\"];\n);\nout body;\n>;\nout skel qt;\n",
+  "element_count": 12725,
+  "processed": "2026-06-10T15:06:45.349Z",
+  "counts": {
+    "buildings": 1018,
+    "roads": 186,
+    "rails": 32,
+    "platforms": 2,
+    "green": 3,
+    "water": 0,
+    "pois": 230
+  }
+}
