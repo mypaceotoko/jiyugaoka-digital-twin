@@ -1,15 +1,18 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { makeFacadeTextures } from "./textures";
 import type { Area, Building, CityData, Pt, Rail, Road } from "./types";
 
 export interface CityMeshes {
   group: THREE.Group;
   ground: THREE.Mesh;
   streetLights: THREE.Points;
-  buildingMaterial: THREE.MeshLambertMaterial;
+  lightPositions: Pt[];
+  buildingMaterial: THREE.MeshLambertMaterial; // facade (windows glow at night)
 }
 
 const DISPLAY_RADIUS = 320;
+const FLOOR = 3.2; // meters per window cell
 
 // deterministic pseudo-random (stable colors across loads)
 function hash01(i: number): number {
@@ -18,24 +21,64 @@ function hash01(i: number): number {
 }
 
 function buildingColor(b: Building, i: number): THREE.Color {
-  const r = hash01(i);
+  const r1 = hash01(i);
+  const r2 = hash01(i * 7 + 3);
   const c = new THREE.Color();
-  switch (b.t) {
-    case "retail":
-    case "commercial":
-      c.setHSL(0.07 + r * 0.05, 0.22, 0.74 + r * 0.1); // warm shop tones
-      break;
-    case "train_station":
-      c.setHSL(0.58, 0.18, 0.62);
-      break;
-    case "apartments":
-    case "residential":
-      c.setHSL(0.10 + r * 0.04, 0.10, 0.80 + r * 0.08);
-      break;
-    default:
-      c.setHSL(0.09 + r * 0.06, 0.08 + r * 0.08, 0.78 + r * 0.12);
+  if (b.t === "train_station") {
+    c.setHSL(0.58, 0.16, 0.6);
+  } else if (r2 < 0.1) {
+    c.setHSL(0.06 + r1 * 0.02, 0.3 + r1 * 0.15, 0.42 + r1 * 0.15); // brick / brown
+  } else if (r2 < 0.25) {
+    c.setHSL(0.6, 0.02 + r1 * 0.03, 0.55 + r1 * 0.2); // cool gray
+  } else if (r2 < 0.34) {
+    c.setHSL(0.1, 0.04, 0.92); // near white
+  } else {
+    c.setHSL(0.07 + r1 * 0.06, 0.08 + r1 * 0.14, 0.74 + r1 * 0.16); // beige family
   }
   return c;
+}
+
+/** Walls as textured quads (u: 1 window per FLOOR meters, v: 1 per floor). */
+function buildingWallGeometry(b: Building, color: THREE.Color): THREE.BufferGeometry {
+  const f = b.f;
+  const n = f.length;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const colors: number[] = [];
+  const dark = color.clone().multiplyScalar(0.66); // grounded base, fake AO
+  for (let i = 0; i < n; i++) {
+    const [x0, z0] = f[i];
+    const [x1, z1] = f[(i + 1) % n];
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    if (len < 0.05) continue;
+    const nx = (z1 - z0) / len;
+    const nz = -(x1 - x0) / len;
+    const u1 = Math.max(1, Math.round(len / FLOOR));
+    const v1 = Math.max(1, Math.round(b.h / FLOOR));
+    // two triangles: b0,b1,t1  b0,t1,t0
+    const quadPos = [
+      [x0, 0, z0], [x1, 0, z1], [x1, b.h, z1],
+      [x0, 0, z0], [x1, b.h, z1], [x0, b.h, z0],
+    ];
+    const quadUv = [
+      [0, 0], [u1, 0], [u1, v1],
+      [0, 0], [u1, v1], [0, v1],
+    ];
+    const quadCol = [dark, dark, color, dark, color, color];
+    for (let k = 0; k < 6; k++) {
+      positions.push(...quadPos[k]);
+      normals.push(nx, 0, nz);
+      uvs.push(...quadUv[k]);
+      colors.push(quadCol[k].r, quadCol[k].g, quadCol[k].b);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return geo;
 }
 
 function withColor(geo: THREE.BufferGeometry, color: THREE.Color): THREE.BufferGeometry {
@@ -59,28 +102,46 @@ function footprintShape(f: Pt[]): THREE.Shape {
   return shape;
 }
 
-function buildBuildings(buildings: Building[]): { mesh: THREE.Mesh; material: THREE.MeshLambertMaterial } {
-  const geos: THREE.BufferGeometry[] = [];
+function buildBuildings(buildings: Building[]): {
+  walls: THREE.Mesh;
+  roofs: THREE.Mesh;
+  material: THREE.MeshLambertMaterial;
+} {
+  const wallGeos: THREE.BufferGeometry[] = [];
+  const roofGeos: THREE.BufferGeometry[] = [];
   buildings.forEach((b, i) => {
     if (b.f.length < 3) return;
+    const color = buildingColor(b, i);
     try {
-      const geo = new THREE.ExtrudeGeometry(footprintShape(b.f), {
-        depth: b.h,
-        bevelEnabled: false,
-      });
-      geo.rotateX(-Math.PI / 2);
-      geos.push(withColor(geo, buildingColor(b, i)));
+      wallGeos.push(buildingWallGeometry(b, color));
+      const roof = new THREE.ShapeGeometry(footprintShape(b.f));
+      roof.rotateX(-Math.PI / 2);
+      roof.translate(0, b.h, 0);
+      const roofColor = color.clone().multiplyScalar(0.8).lerp(new THREE.Color(0x8d8d8a), 0.35);
+      roofGeos.push(withColor(roof, roofColor));
     } catch {
       /* skip malformed footprint */
     }
   });
-  const merged = mergeGeometries(geos, false)!;
-  geos.forEach((g) => g.dispose());
-  merged.computeVertexNormals();
-  const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const mesh = new THREE.Mesh(merged, material);
-  mesh.name = "buildings";
-  return { mesh, material };
+
+  const { map, emissiveMap } = makeFacadeTextures();
+  const material = new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    map,
+    emissiveMap,
+    emissive: new THREE.Color(0xffc88a),
+    emissiveIntensity: 0,
+    side: THREE.DoubleSide,
+  });
+  const walls = new THREE.Mesh(mergeGeometries(wallGeos, false)!, material);
+  walls.name = "buildingWalls";
+  wallGeos.forEach((g) => g.dispose());
+
+  const roofMerged = mergeGeometries(roofGeos, false)!;
+  roofGeos.forEach((g) => g.dispose());
+  const roofs = new THREE.Mesh(roofMerged, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  roofs.name = "buildingRoofs";
+  return { walls, roofs, material };
 }
 
 /** Flat ribbon along a polyline (indexed geometry, y constant). */
@@ -121,9 +182,9 @@ function ribbonGeometry(p: Pt[], width: number, y: number, color: THREE.Color): 
 }
 
 const ROAD_COLORS: Record<string, number> = {
-  trunk: 0x4a4d52, primary: 0x50535a, secondary: 0x54575e, tertiary: 0x5a5d64,
-  residential: 0x63666c, unclassified: 0x63666c, living_street: 0x6d6f74,
-  service: 0x6b6d72, pedestrian: 0x8d8276, footway: 0x97897a, path: 0x91876f,
+  trunk: 0x3c3e43, primary: 0x404247, secondary: 0x44464b, tertiary: 0x494b50,
+  residential: 0x4f5156, unclassified: 0x4f5156, living_street: 0x595a5e,
+  service: 0x57585c, pedestrian: 0x9b8c79, footway: 0xa3937e, path: 0x97896c,
   steps: 0x8a7c6c, cycleway: 0x7a7468, track: 0x84765f,
 };
 
@@ -137,7 +198,7 @@ function buildRoads(roads: Road[]): THREE.Mesh {
   const geos: THREE.BufferGeometry[] = [];
   const c = new THREE.Color();
   for (const r of roads) {
-    c.setHex(ROAD_COLORS[r.t] ?? 0x63666c);
+    c.setHex(ROAD_COLORS[r.t] ?? 0x4f5156);
     const g = ribbonGeometry(r.p, r.w, roadY(r), c);
     if (g) geos.push(g);
   }
@@ -245,8 +306,9 @@ function buildPlatforms(platforms: { f: Pt[]; el: number }[]): THREE.Mesh | null
 
 const LIT_ROADS = new Set(["residential", "pedestrian", "living_street", "tertiary", "secondary", "unclassified", "primary"]);
 
-function buildStreetLights(roads: Road[]): THREE.Points {
-  const pos: number[] = [];
+/** Street light positions sampled along major walkable roads. */
+export function computeLightPositions(roads: Road[]): Pt[] {
+  const out: Pt[] = [];
   for (const r of roads) {
     if (!LIT_ROADS.has(r.t)) continue;
     let acc = 0;
@@ -262,7 +324,7 @@ function buildStreetLights(roads: Road[]): THREE.Points {
         const need = 28 - acc;
         const f = (seg - dRemain + need) / seg;
         const off = (r.w / 2 + 0.8) * side;
-        pos.push(x0 + (x1 - x0) * f - dz * off, 4.4, z0 + (z1 - z0) * f + dx * off);
+        out.push([x0 + (x1 - x0) * f - dz * off, z0 + (z1 - z0) * f + dx * off]);
         side = -side;
         dRemain -= need;
         acc = 0;
@@ -270,6 +332,12 @@ function buildStreetLights(roads: Road[]): THREE.Points {
       acc += dRemain;
     }
   }
+  return out;
+}
+
+function buildStreetLights(positions: Pt[]): THREE.Points {
+  const pos: number[] = [];
+  for (const [x, z] of positions) pos.push(x, 4.4, z);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   const mat = new THREE.PointsMaterial({
@@ -290,10 +358,10 @@ export function buildCity(data: CityData): CityMeshes {
   const group = new THREE.Group();
   group.name = "city";
 
-  // ground disc
+  // ground disc (light, warm — roads read as dark on top of it)
   const ground = new THREE.Mesh(
     new THREE.CircleGeometry(DISPLAY_RADIUS + 40, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshLambertMaterial({ color: 0xb3b0a7 }),
+    new THREE.MeshLambertMaterial({ color: 0xcfcabc }),
   );
   ground.name = "ground";
   ground.position.y = -0.02;
@@ -301,7 +369,7 @@ export function buildCity(data: CityData): CityMeshes {
 
   const water = buildFlatAreas(data.water, 0.03, 0x7fa8c9);
   if (water) group.add(water);
-  const green = buildFlatAreas(data.green, 0.04, 0x86a86a, 1);
+  const green = buildFlatAreas(data.green, 0.04, 0x7da45e, 1);
   if (green) group.add(green);
 
   group.add(buildRoads(data.roads));
@@ -309,11 +377,12 @@ export function buildCity(data: CityData): CityMeshes {
   const platforms = buildPlatforms(data.platforms);
   if (platforms) group.add(platforms);
 
-  const { mesh: buildings, material: buildingMaterial } = buildBuildings(data.buildings);
-  group.add(buildings);
+  const { walls, roofs, material: buildingMaterial } = buildBuildings(data.buildings);
+  group.add(walls, roofs);
 
-  const streetLights = buildStreetLights(data.roads);
+  const lightPositions = computeLightPositions(data.roads);
+  const streetLights = buildStreetLights(lightPositions);
   group.add(streetLights);
 
-  return { group, ground, streetLights, buildingMaterial };
+  return { group, ground, streetLights, lightPositions, buildingMaterial };
 }
