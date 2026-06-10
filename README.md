@@ -14,7 +14,8 @@ Jiyugaoka Digital Twin is a 3D city simulation prototype that recreates the stre
 - 🌳 街路樹・街灯などのストリートスケープ
 - 📷 カメラ3モード: 俯瞰（オービット）／地上（バーチャルジョイスティックで歩行）／シネマティック
 - 🌇 昼・夕・夜の環境プリセット切り替え
-- 📱 スマホ最適化: メッシュ結合＋インスタンシングによる少ドローコール、pixelRatio制限
+- 🛰 都市監視モード: 歩行者/車/電車の検知ボックス＋ID、店舗ラベル、モニタHUD
+- 📱 スマホ最適化: メッシュ結合＋インスタンシング、pixelRatio制限＋自動性能ティア、PWA（オフラインキャッシュ・ホーム画面追加）
 
 ## Roadmap
 
@@ -25,8 +26,8 @@ Jiyugaoka Digital Twin is a 3D city simulation prototype that recreates the stre
 | 2 | Accurate City Foundation（PLATEAU LOD1建物への差し替え） | ✅ |
 | 3 | Walkable City（地上視点・カメラ切替） | ✅ (基本実装) |
 | 4 | Visual Enhancement（昼夕夜・街灯・植栽・ファサード） | 🔜 一部実装 |
-| 5 | Simulation Layer（歩行者・車両・検知ラベルUI） | 🔜 |
-| 6 | Mobile Web Demo（PWA・最終最適化） | 🔜 |
+| 5 | Simulation Layer（歩行者・車両・検知ラベルUI） | ✅ (基本実装) |
+| 6 | Mobile Web Demo（PWA・最終最適化） | ✅ (基本実装) |
 
 詳細は [docs/development-plan.md](docs/development-plan.md)（開発計画書）と [docs/roadmap.md](docs/roadmap.md) を参照。
 
