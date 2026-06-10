@@ -1,0 +1,25 @@
+Jiyugaoka Digital Twin
+Copyright (c) 2026 mypaceotoko
+
+This product includes data and software from the following third parties:
+
+1. OpenStreetMap
+   © OpenStreetMap contributors
+   License: Open Data Commons Open Database License (ODbL) 1.0
+   https://www.openstreetmap.org/copyright
+   Applies to: data/processed/, web/public/data/ (derivative databases)
+
+2. Project PLATEAU (国土交通省) — planned for Phase 2
+   出典: 国土交通省 Project PLATEAU「東京都23区 3D都市モデル」(編集・加工して使用)
+   License: 政府標準利用規約 第2.0版 (CC BY 4.0 compatible)
+   https://www.mlit.go.jp/plateau/
+
+3. 国土地理院 基盤地図情報 — planned
+   出典: 国土地理院
+   https://www.gsi.go.jp/kiban/
+
+Runtime / build dependencies (MIT licensed unless noted):
+ - three.js (MIT) https://github.com/mrdoob/three.js
+ - Vite (MIT) https://github.com/vitejs/vite
+ - TypeScript (Apache-2.0) https://github.com/microsoft/TypeScript
+ - proj4js (MIT-style) https://github.com/proj4js/proj4js

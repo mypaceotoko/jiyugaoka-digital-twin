@@ -1,0 +1,20 @@
+# Raw geodata (large, reproducible via scripts/fetch_osm.py — see docs/data-pipeline.md)
+data/raw/
+
+# Dependencies
+node_modules/
+
+# Build outputs
+web/dist/
+dist/
+
+# Editor / OS
+.DS_Store
+*.log
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
