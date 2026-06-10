@@ -9,10 +9,11 @@ This product includes data and software from the following third parties:
    https://www.openstreetmap.org/copyright
    Applies to: data/processed/, web/public/data/ (derivative databases)
 
-2. Project PLATEAU (国土交通省) — planned for Phase 2
+2. Project PLATEAU (国土交通省)
    出典: 国土交通省 Project PLATEAU「東京都23区 3D都市モデル」(編集・加工して使用)
    License: 政府標準利用規約 第2.0版 (CC BY 4.0 compatible)
    https://www.mlit.go.jp/plateau/
+   Applies to: building data in data/processed/ and web/public/data/
 
 3. 国土地理院 基盤地図情報 — planned
    出典: 国土地理院

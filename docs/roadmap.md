@@ -19,11 +19,10 @@
 - [x] クレジット表示UI（© OpenStreetMap contributors）
 - [x] GitHub Pages 自動デプロイ
 
-## Phase 2: Accurate City Foundation ⏳
+## Phase 2: Accurate City Foundation ✅（基本実装）
 
-- [ ] PLATEAU CityGML（目黒区・世田谷区、メッシュ53393523/53393533）のダウンロード
-- [ ] CityGML変換ツール比較検証（plateaukit / citygml-tools / PLATEAU GIS Converter）
-- [ ] PLATEAU LOD1建物への差し替え（OSM建物はフォールバック）
+- [x] PLATEAU CityGML（東京23区 13100、メッシュ53393523/53393533）のCI自動取得（scripts/fetch_plateau.py）
+- [x] LOD1建物への差し替え（実測フットプリント＋measuredHeight。OSM建物はフォールバック、名称・種別はOSMから転写）
 - [ ] 航空写真との重ね合わせによる配置検証
 - [ ] （任意）基盤地図情報5m DEMによる地形
 

@@ -8,7 +8,7 @@ Jiyugaoka Digital Twin is a 3D city simulation prototype that recreates the stre
 
 ## Features (current)
 
-- 🏙 自由が丘駅 中心・半径300mの建物・道路・線路・緑地をOSMデータから3D生成
+- 🏙 自由が丘駅 中心・半径300mの街並みを再現 — **建物はPLATEAU 3D都市モデル（LOD1）の実測フットプリント・高さ**、道路・線路・緑地はOSM
 - 🪟 窓付きファサード（プロシージャルテクスチャ、夜は窓明かりが点灯）
 - 🚶🚗🚃 歩行者・車・電車（東横線/大井町線）のアンビエントシミュレーション
 - 🌳 街路樹・街灯などのストリートスケープ
@@ -22,7 +22,7 @@ Jiyugaoka Digital Twin is a 3D city simulation prototype that recreates the stre
 |---|---|---|
 | 0 | Research & Planning（計画書・エリア定義・ライセンス整備） | ✅ |
 | 1 | Minimal Map Prototype（OSMベースの3D表示・Pages公開） | ✅ |
-| 2 | Accurate City Foundation（PLATEAU LOD1建物への差し替え） | ⏳ |
+| 2 | Accurate City Foundation（PLATEAU LOD1建物への差し替え） | ✅ |
 | 3 | Walkable City（地上視点・カメラ切替） | ✅ (基本実装) |
 | 4 | Visual Enhancement（昼夕夜・街灯・植栽・ファサード） | 🔜 一部実装 |
 | 5 | Simulation Layer（歩行者・車両・検知ラベルUI） | 🔜 |
@@ -35,8 +35,9 @@ Jiyugaoka Digital Twin is a 3D city simulation prototype that recreates the stre
 ```
 [Data pipeline (GitHub Actions / local)]            [Runtime (browser)]
 OSM Overpass API ──→ scripts/fetch_osm.py ──→ data/raw/osm/*.json (not committed)
+PLATEAU CityGML ──→ scripts/fetch_plateau.py ──→ data/processed/plateau_buildings.json
                      scripts/process_osm.mjs ──→ web/public/data/city.json
-PLATEAU CityGML (Phase 2) ──→ glTF                  Three.js + Vite + TypeScript
+                                                    Three.js + Vite + TypeScript
                                                     └→ GitHub Pages
 ```
 
@@ -67,7 +68,7 @@ node scripts/process_osm.mjs            # → data/processed/city.json + web/pub
 This project uses the following open data. 本プロジェクトは以下のオープンデータを利用しています。
 
 - **OpenStreetMap** — © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), licensed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/). `data/processed/` および `web/public/data/` に含まれるOSM由来の加工データ（派生データベース）もODbLが適用されます。
-- **Project PLATEAU**（Phase 2で利用予定）— 出典: 国土交通省 Project PLATEAU「[東京都23区 3D都市モデル](https://www.geospatial.jp/ckan/dataset/plateau-tokyo23ku)」（編集・加工して使用）
+- **Project PLATEAU** — 出典: 国土交通省 Project PLATEAU「[東京都23区 3D都市モデル](https://www.geospatial.jp/ckan/dataset/plateau-tokyo23ku)」（編集・加工して使用）。建物の形状・高さに利用
 - **国土地理院 基盤地図情報**（地形導入時に利用予定）— 出典: [国土地理院](https://www.gsi.go.jp/kiban/)
 
 詳細は [ATTRIBUTION.md](ATTRIBUTION.md) を参照してください。
