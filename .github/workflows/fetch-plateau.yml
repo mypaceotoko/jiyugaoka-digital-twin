@@ -1,8 +1,9 @@
-name: fetch-data
+name: fetch-plateau
 
-# Fetches OSM data via Overpass API and regenerates city.json.
-# Run manually from the Actions tab (workflow_dispatch).
-# Derived data is ODbL 1.0 — (c) OpenStreetMap contributors.
+# Downloads PLATEAU CityGML (Tokyo 23-ku) for the Jiyugaoka meshes,
+# extracts LOD1 buildings, then rebuilds city.json (PLATEAU buildings +
+# OSM roads/rails/names) and commits the result.
+# 出典: 国土交通省 Project PLATEAU（編集・加工して使用）
 
 on:
   workflow_dispatch:
@@ -10,8 +11,8 @@ on:
     branches:
       - claude/jiyugaoka-dev-plan-ig4ycu
     paths:
-      - "scripts/fetch_osm.py"
-      - ".github/workflows/fetch-data.yml"
+      - "scripts/fetch_plateau.py"
+      - ".github/workflows/fetch-plateau.yml"
 
 permissions:
   contents: write
@@ -19,6 +20,7 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -30,14 +32,17 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Fetch OSM data (Overpass API)
+      - name: Fetch PLATEAU buildings (CityGML LOD1)
+        run: python3 scripts/fetch_plateau.py
+
+      - name: Fetch OSM data (for roads/rails/names)
         run: python3 scripts/fetch_osm.py
 
       - name: Install pipeline dependencies
         working-directory: scripts
         run: npm ci
 
-      - name: Process into city.json
+      - name: Rebuild city.json
         run: node scripts/process_osm.mjs
 
       - name: Commit & push generated data
@@ -48,7 +53,10 @@ jobs:
           if git diff --cached --quiet; then
             echo "No data changes."
           else
-            git commit -m "data: regenerate city.json from OSM (ODbL, (c) OpenStreetMap contributors)"
+            git commit -m "data: rebuild city.json with PLATEAU LOD1 buildings
+
+出典: 国土交通省 Project PLATEAU 東京都23区 3D都市モデル（編集・加工して使用）
+roads/rails/names: (c) OpenStreetMap contributors (ODbL)"
             git pull --rebase
             git push
           fi
