@@ -42,15 +42,16 @@
 - [ ] 商店街ファサード（メインストリート1本から）
 - [ ] 九品仏川緑道の作り込み
 
-## Phase 5: Simulation Layer 🔜（一部実装）
+## Phase 5: Simulation Layer ✅（基本実装）
 
 - [x] 歩行者エージェント（OSM歩道ネットワーク上、約130人）
 - [x] 車両（道路ネットワーク上、約30台）
 - [x] 電車（東横線・大井町線の線形上を走行）
-- [ ] 検知ラベル・都市監視UI風オーバーレイ（POIデータはcity.jsonに格納済み）
+- [x] 検知ラベル・都市監視UI風オーバーレイ（🛰ボタンでON/OFF。歩行者/車/電車の検知枠＋ID、近傍店舗ラベル、モニタHUD）
 
-## Phase 6: Mobile Web Demo 🔜
+## Phase 6: Mobile Web Demo ✅（基本実装）
 
-- [ ] 性能予算の最終達成（初期転送10MB以下・30fps、実機計測）
-- [ ] PWA化（Service Workerによるデータキャッシュ）
-- [ ] OGP・シェア導線・スクリーンショット・デモ動画
+- [x] PWA化（manifest + Service Worker のstale-while-revalidateキャッシュ、ホーム画面追加対応）
+- [x] OGP・アイコン（プロシージャル生成の夜景スカイライン）
+- [x] 低速端末向け自動劣化（持続的低fps時にpixelRatioを段階的に削減）
+- [ ] 実機での最終計測記録・スクリーンショット・デモ動画

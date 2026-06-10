@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { CameraRig } from "./cameras";
+import { Monitor } from "./monitor";
 import { buildCity } from "./city";
 import { Environment } from "./environment";
 import { Simulation } from "./sim";
@@ -44,6 +45,7 @@ async function init(): Promise<void> {
   scene.add(stationLabel);
 
   const environment = new Environment(scene, city);
+  const monitor = new Monitor(data.pois);
 
   setupUi({
     onMode: (mode) => {
@@ -52,6 +54,7 @@ async function init(): Promise<void> {
     },
     onTime: (time) => environment.apply(time),
     onJoystick: (x, y) => rig.setJoystick(x, y),
+    onMonitor: (on) => monitor.setEnabled(on),
   });
 
   window.addEventListener("resize", () => {
@@ -67,6 +70,22 @@ async function init(): Promise<void> {
   let frames = 0;
   let fpsTime = performance.now();
 
+  // auto performance tier: drop pixelRatio if sustained low fps
+  let degradeFrames = 0;
+  let degradeTime = performance.now();
+  let tier = 0;
+  setInterval(() => {
+    const now = performance.now();
+    const fps = (degradeFrames * 1000) / (now - degradeTime);
+    degradeFrames = 0;
+    degradeTime = now;
+    if (fps > 5 && fps < 24 && tier < 2) {
+      tier++;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier === 1 ? 1.5 : 1));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+  }, 3000);
+
   const clock = new THREE.Clock();
   let time = 0;
   renderer.setAnimationLoop(() => {
@@ -74,7 +93,9 @@ async function init(): Promise<void> {
     time += dt;
     rig.update(dt);
     sim.update(dt, time);
+    monitor.update(rig.camera, sim);
     renderer.render(scene, rig.camera);
+    degradeFrames++;
     if (debug) {
       frames++;
       const now = performance.now();
@@ -87,6 +108,11 @@ async function init(): Promise<void> {
   });
 
   hideLoading();
+
+  // PWA: cache app shell + city data for instant repeat visits
+  if (import.meta.env.PROD && "serviceWorker" in navigator) {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
+  }
 }
 
 init();

@@ -19,6 +19,7 @@ export interface UiCallbacks {
   onMode(mode: CameraMode): void;
   onTime(time: TimeOfDay): void;
   onJoystick(x: number, y: number): void;
+  onMonitor(on: boolean): void;
 }
 
 export function setupUi(cb: UiCallbacks): void {
@@ -34,6 +35,14 @@ export function setupUi(cb: UiCallbacks): void {
     modeBtn.textContent = MODE_LABELS[mode];
     joystickEl.classList.toggle("visible", mode === "ground");
     cb.onMode(mode);
+  });
+
+  const monitorBtn = document.getElementById("btn-monitor") as HTMLButtonElement;
+  let monitorOn = false;
+  monitorBtn.addEventListener("click", () => {
+    monitorOn = !monitorOn;
+    monitorBtn.textContent = monitorOn ? "🛰 監視 ON" : "🛰 監視 OFF";
+    cb.onMonitor(monitorOn);
   });
 
   let timeIdx = 0;

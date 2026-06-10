@@ -1,0 +1,15 @@
+{
+  "name": "Jiyugaoka Digital Twin",
+  "short_name": "Jiyugaoka DT",
+  "description": "自由が丘の街並みをオープンデータ（PLATEAU / OpenStreetMap）で再現する3D都市シミュレーター",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1026",
+  "theme_color": "#0b1026",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
