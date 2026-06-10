@@ -49,6 +49,6 @@ jobs:
             echo "No data changes."
           else
             git commit -m "data: regenerate city.json from OSM (ODbL, (c) OpenStreetMap contributors)"
-            git pull --rebase
+            git pull --rebase -X theirs
             git push
           fi
