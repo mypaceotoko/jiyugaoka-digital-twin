@@ -1,5 +1,10 @@
 name: deploy
 
+# Builds web/ and publishes to the gh-pages branch.
+# (The repo's GITHUB_TOKEN cannot create a Pages site via the Pages API,
+#  so we use branch-based publishing, which GitHub enables automatically
+#  for a gh-pages branch.)
+
 on:
   push:
     branches:
@@ -7,16 +12,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,21 +36,9 @@ jobs:
           npm ci
           npm run build
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          enablement: true
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: web/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: web/dist
+          commit_message: "deploy: ${{ github.sha }}"
