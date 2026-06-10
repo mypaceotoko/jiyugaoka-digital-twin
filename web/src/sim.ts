@@ -98,8 +98,19 @@ const DRIVE_ROADS = new Set(["primary", "secondary", "tertiary", "residential", 
 const CLOTHES = [0x3a4a6b, 0x6b3a3a, 0x46663d, 0x55505e, 0x8a7f6a, 0xb0b4bb, 0x2e2e34, 0x7a5c47];
 const CAR_COLORS = [0xd8d8da, 0x2b2b30, 0x9aa0a8, 0x5d6b7a, 0x8c3030, 0x3d5a4f, 0xcfc8b8];
 
+export interface AgentSnapshot {
+  x: number;
+  y: number;
+  z: number;
+  id: string;
+}
+
 export class Simulation {
   readonly group = new THREE.Group();
+  /** world positions updated every frame — consumed by the monitor overlay */
+  readonly walkerSnapshots: AgentSnapshot[] = [];
+  readonly carSnapshots: AgentSnapshot[] = [];
+  readonly trainSnapshots: AgentSnapshot[] = [];
   private walkers: PathAgent[] = [];
   private cars: PathAgent[] = [];
   private trains: { agent: PathAgent; carCount: number; spacing: number }[] = [];
@@ -141,6 +152,9 @@ export class Simulation {
     this.walkerBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.walkerHead.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.walkerBody, this.walkerHead);
+    for (let i = 0; i < n; i++) {
+      this.walkerSnapshots.push({ x: 0, y: 0, z: 0, id: `PED-${String(i + 1).padStart(3, "0")}` });
+    }
   }
 
   private initCars(roads: Road[]): void {
@@ -167,6 +181,9 @@ export class Simulation {
     this.carBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.carCabin.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.carBody, this.carCabin);
+    for (let i = 0; i < n; i++) {
+      this.carSnapshots.push({ x: 0, y: 0, z: 0, id: `VEH-${String(i + 1).padStart(3, "0")}` });
+    }
   }
 
   private initTrains(rails: Rail[]): void {
@@ -218,6 +235,9 @@ export class Simulation {
     }
     this.trainCars.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.trainCars);
+    this.trains.forEach((_t, i) => {
+      this.trainSnapshots.push({ x: 0, y: 0, z: 0, id: `TRN-${String(i + 1).padStart(2, "0")}` });
+    });
   }
 
   update(dt: number, time: number): void {
@@ -235,6 +255,8 @@ export class Simulation {
         d.updateMatrix();
         this.walkerBody.setMatrixAt(i, d.matrix);
         this.walkerHead.setMatrixAt(i, d.matrix);
+        const ws = this.walkerSnapshots[i];
+        ws.x = smp.x; ws.y = w.y + 1.7; ws.z = smp.z;
       });
       this.walkerBody.instanceMatrix.needsUpdate = true;
       this.walkerHead.instanceMatrix.needsUpdate = true;
@@ -252,6 +274,8 @@ export class Simulation {
         d.updateMatrix();
         this.carBody.setMatrixAt(i, d.matrix);
         this.carCabin.setMatrixAt(i, d.matrix);
+        const cs = this.carSnapshots[i];
+        cs.x = smp.x; cs.y = car.y + 2; cs.z = smp.z;
       });
       this.carBody.instanceMatrix.needsUpdate = true;
       this.carCabin.instanceMatrix.needsUpdate = true;
@@ -259,6 +283,7 @@ export class Simulation {
 
     if (this.trainCars) {
       let idx = 0;
+      let ti = 0;
       for (const t of this.trains) {
         step(t.agent, dt);
         for (let k = 0; k < t.carCount; k++) {
@@ -271,7 +296,12 @@ export class Simulation {
           d.scale.setScalar(1);
           d.updateMatrix();
           this.trainCars.setMatrixAt(idx++, d.matrix);
+          if (k === 0) {
+            const ts = this.trainSnapshots[ti];
+            if (ts) { ts.x = smp.x; ts.y = t.agent.y + 4.5; ts.z = smp.z; }
+          }
         }
+        ti++;
       }
       this.trainCars.instanceMatrix.needsUpdate = true;
     }
