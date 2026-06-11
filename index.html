@@ -40,6 +40,7 @@
       color: #fff; background: rgba(20, 24, 40, .72); backdrop-filter: blur(8px); cursor: pointer;
       box-shadow: 0 2px 10px rgba(0,0,0,.25); }
     .hud button:active { transform: scale(.96); }
+    .hud button.active { background: rgba(232, 198, 110, .85); color: #1a1408; }
 
     #credits-btn { position: fixed; z-index: 20; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
       width: 34px; height: 34px; border-radius: 50%; border: 0; font-size: 15px; color: #fff;
@@ -90,8 +91,10 @@
     .det-box[data-cls="veh"] span { color: #ffd9ad; background: rgba(30, 18, 2, .6); }
     .det-box[data-cls="trn"] { border-color: #ff5d6d; box-shadow: 0 0 8px rgba(255, 93, 109, .4); }
     .det-box[data-cls="trn"] span { color: #ffc2c9; background: rgba(32, 4, 8, .65); }
+    .det-box[data-cls="bus"] { border-color: #ffe14a; box-shadow: 0 0 7px rgba(255, 225, 74, .4); }
+    .det-box[data-cls="bus"] span { color: #fff3b8; background: rgba(30, 26, 2, .65); }
   </style>
-  <script type="module" crossorigin src="/jiyugaoka-digital-twin/assets/index-BUD8P_q1.js"></script>
+  <script type="module" crossorigin src="/jiyugaoka-digital-twin/assets/index-DHSFaNv4.js"></script>
 </head>
 <body>
   <div id="app"></div>
@@ -106,6 +109,7 @@
     <button id="btn-mode">📷 俯瞰</button>
     <button id="btn-time">☀️ 昼</button>
     <button id="btn-monitor">🛰 監視 OFF</button>
+    <button id="btn-lapse">⏩ タイムラプス</button>
   </div>
 
   <div id="joystick"><div class="knob"></div></div>
