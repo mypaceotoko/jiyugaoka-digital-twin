@@ -8,6 +8,7 @@ import { buildStreetscape } from "./streetscape";
 import { makeLabelSprite } from "./textures";
 import type { CityData } from "./types";
 import { hideLoading, setupUi, showLoadingError } from "./ui";
+import type { TimeOfDay } from "./environment";
 
 async function init(): Promise<void> {
   const app = document.getElementById("app")!;
@@ -50,14 +51,29 @@ async function init(): Promise<void> {
   const environment = new Environment(scene, city, renderer);
   const monitor = new Monitor(data.pois);
 
-  setupUi({
+  // timelapse: full day in ~70 s, agents fast-forwarded
+  const LAPSE_HOURS_PER_SEC = 0.35;
+  const LAPSE_SIM_SPEED = 7;
+  let lapse = false;
+  let dayClock = 6; // start at dawn
+  let lastPreset: TimeOfDay = "day";
+
+  const ui = setupUi({
     onMode: (mode) => {
       rig.setMode(mode);
       stationLabel.visible = mode !== "ground";
     },
-    onTime: (time) => environment.apply(time),
+    onTime: (time) => {
+      lastPreset = time;
+      environment.apply(time);
+    },
     onJoystick: (x, y) => rig.setJoystick(x, y),
     onMonitor: (on) => monitor.setEnabled(on),
+    onTimelapse: (on) => {
+      lapse = on;
+      if (on) dayClock = 5.5;
+      else environment.apply(lastPreset);
+    },
   });
 
   window.addEventListener("resize", () => {
@@ -99,11 +115,24 @@ async function init(): Promise<void> {
 
   const clock = new THREE.Clock();
   let time = 0;
+  let clockLabelCooldown = 0;
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
-    time += dt;
+    const simDt = lapse ? dt * LAPSE_SIM_SPEED : dt;
+    time += simDt;
+    if (lapse) {
+      dayClock = (dayClock + dt * LAPSE_HOURS_PER_SEC) % 24;
+      environment.applyHour(dayClock);
+      clockLabelCooldown -= dt;
+      if (clockLabelCooldown <= 0) {
+        clockLabelCooldown = 0.25;
+        const hh = String(Math.floor(dayClock)).padStart(2, "0");
+        const mm = String(Math.floor((dayClock % 1) * 60)).padStart(2, "0");
+        ui.setClock(`🕒 ${hh}:${mm}`);
+      }
+    }
     rig.update(dt);
-    sim.update(dt, time);
+    sim.update(simDt, time);
     monitor.update(rig.camera, sim);
     renderer.render(scene, rig.camera);
     degradeFrames++;

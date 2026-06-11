@@ -121,6 +121,7 @@ export class Monitor {
     };
     collect(sim.walkerSnapshots, "ped", DET_RANGE);
     collect(sim.carSnapshots, "veh", DET_RANGE);
+    collect(sim.busSnapshots, "bus", DET_RANGE + 80);
     collect(sim.trainSnapshots, "trn", 600);
     candidates.sort((a, b) => a.d2 - b.d2);
 
@@ -131,7 +132,9 @@ export class Monitor {
       if (!pr) continue;
       const el = this.detEls[di++];
       const dist = Math.sqrt(pr.d2);
-      const size = THREE.MathUtils.clamp(900 / dist, 14, 52) * (c.cls === "trn" ? 2.2 : c.cls === "veh" ? 1.4 : 1);
+      const size =
+        THREE.MathUtils.clamp(900 / dist, 14, 52) *
+        (c.cls === "trn" ? 2.2 : c.cls === "bus" ? 1.8 : c.cls === "veh" ? 1.4 : 1);
       el.style.display = "block";
       el.dataset.cls = c.cls;
       el.style.width = `${size.toFixed(0)}px`;
@@ -144,7 +147,7 @@ export class Monitor {
     // --- HUD ---
     this.hud.innerHTML =
       `<b>JIYUGAOKA CITY MONITOR</b><br>` +
-      `PED ${sim.walkerSnapshots.length} · VEH ${sim.carSnapshots.length} · TRN ${sim.trainSnapshots.length}<br>` +
+      `PED ${sim.walkerSnapshots.length} · VEH ${sim.carSnapshots.length} · BUS ${sim.busSnapshots.length} · TRN ${sim.trainSnapshots.length}<br>` +
       `CAM E${cx.toFixed(0)} N${(-cz).toFixed(0)} ALT${camera.position.y.toFixed(0)}`;
   }
 }
