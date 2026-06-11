@@ -142,7 +142,7 @@ function sakuraCrownGeometry(): THREE.BufferGeometry {
   return merged;
 }
 
-function benchGeometry(): THREE.BufferGeometry {
+export function benchGeometry(): THREE.BufferGeometry {
   const parts = [
     new THREE.BoxGeometry(1.7, 0.07, 0.5).translate(0, 0.43, 0),
     new THREE.BoxGeometry(1.7, 0.42, 0.06).translate(0, 0.74, -0.25),

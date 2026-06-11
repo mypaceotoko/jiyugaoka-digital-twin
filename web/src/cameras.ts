@@ -27,6 +27,8 @@ export class CameraRig {
   mode: CameraMode = "aerial";
   /** notified when aerial tap-focus starts/ends (drives the "overview" button) */
   onAerialFocus?: (focused: boolean) => void;
+  /** every tap (aerial or ground) with a ready raycaster — used for building info */
+  onSceneTap?: (ray: THREE.Raycaster) => void;
 
   private controls: OrbitControls;
   private joystick: { x: number; y: number } = { x: 0, y: 0 };
@@ -55,7 +57,8 @@ export class CameraRig {
       this.activePointers++;
       if (this.mode === "ground") {
         this.lookDrag = { id: e.pointerId, x: e.clientX, y: e.clientY };
-      } else if (this.mode === "aerial" && this.activePointers === 1) {
+      }
+      if (this.mode !== "cinematic" && this.activePointers === 1) {
         this.tap = { id: e.pointerId, x: e.clientX, y: e.clientY, time: performance.now() };
       } else {
         this.tap = null; // multi-touch (pinch) is never a tap
@@ -76,8 +79,10 @@ export class CameraRig {
         const dt = performance.now() - this.tap.time;
         const tap = this.tap;
         this.tap = null;
-        if (this.mode === "aerial" && moved < 8 && dt < 350) {
-          this.handleAerialTap(tap.x, tap.y, canvas);
+        if (moved < 8 && dt < 350) {
+          const ray = this.rayFromScreen(tap.x, tap.y, canvas);
+          this.onSceneTap?.(ray);
+          if (this.mode === "aerial") this.handleAerialTap(ray);
         }
       }
     };
@@ -88,8 +93,7 @@ export class CameraRig {
     window.addEventListener("keyup", (e) => this.keys.delete(e.key.toLowerCase()));
   }
 
-  /** Tap in aerial mode: raycast to the ground plane and fly the camera there. */
-  private handleAerialTap(clientX: number, clientY: number, canvas: HTMLCanvasElement): void {
+  private rayFromScreen(clientX: number, clientY: number, canvas: HTMLCanvasElement): THREE.Raycaster {
     const rect = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -97,6 +101,11 @@ export class CameraRig {
     );
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, this.camera);
+    return ray;
+  }
+
+  /** Tap in aerial mode: raycast to the ground plane and fly the camera there. */
+  private handleAerialTap(ray: THREE.Raycaster): void {
     const dir = ray.ray.direction;
     if (dir.y >= -0.01) return; // looking at the sky
     const t = -ray.ray.origin.y / dir.y;

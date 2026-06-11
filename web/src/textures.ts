@@ -160,6 +160,37 @@ export function makePaverTexture(): THREE.Texture {
   return tex;
 }
 
+/** Simple clock face for the station-front clock tower. */
+export function makeClockTexture(): THREE.Texture {
+  const S = 128;
+  const [c, g] = makeCanvas(S);
+  g.fillStyle = "#2e3338";
+  g.fillRect(0, 0, S, S);
+  g.fillStyle = "#f5f2e8";
+  g.beginPath();
+  g.arc(S / 2, S / 2, S * 0.42, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = "#2e3338";
+  g.lineWidth = 3;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(S / 2 + Math.cos(a) * S * 0.34, S / 2 + Math.sin(a) * S * 0.34);
+    g.lineTo(S / 2 + Math.cos(a) * S * 0.4, S / 2 + Math.sin(a) * S * 0.4);
+    g.stroke();
+  }
+  g.lineWidth = 4;
+  g.beginPath();
+  g.moveTo(S / 2, S / 2);
+  g.lineTo(S / 2 + S * 0.2, S / 2 - S * 0.12);
+  g.moveTo(S / 2, S / 2);
+  g.lineTo(S / 2 - S * 0.06, S / 2 - S * 0.3);
+  g.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** Floating text label (e.g. station name). */
 export function makeLabelSprite(text: string, sub?: string): THREE.Sprite {
   const c = document.createElement("canvas");
@@ -181,8 +212,9 @@ export function makeLabelSprite(text: string, sub?: string): THREE.Sprite {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }),
+    new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }),
   );
+  sprite.renderOrder = 50; // labels are never hidden behind buildings
   sprite.scale.set(48, 15, 1);
   return sprite;
 }
