@@ -12,6 +12,7 @@ export interface Road {
   p: Pt[];
   w: number; // width in meters
   t: string; // OSM highway=* value
+  n?: string; // street name (when tagged in OSM)
   b?: number; // bridge flag
   ly?: number; // OSM layer
 }
