@@ -5,6 +5,8 @@ import { buildCity } from "./city";
 import { Environment } from "./environment";
 import { Simulation } from "./sim";
 import { buildGreenway } from "./greenway";
+import { buildStationFront } from "./stationfront";
+import { pickBuildingIndex } from "./city";
 import { buildStreetscape } from "./streetscape";
 import { makeLabelSprite } from "./textures";
 import type { CityData } from "./types";
@@ -42,6 +44,7 @@ async function init(): Promise<void> {
   scene.add(city.group);
   const greenway = buildGreenway(data);
   scene.add(greenway.group);
+  scene.add(buildStationFront());
   scene.add(buildStreetscape(data, city.lightPositions, greenway.roads));
 
   const sim = new Simulation(data);
@@ -73,6 +76,37 @@ async function init(): Promise<void> {
   };
   overviewBtn.addEventListener("click", () => rig.resetAerial());
   setTimeout(() => tapHint.classList.add("hidden"), 8000);
+
+  // tap a building -> info card (PLATEAU height/shape, OSM name)
+  const infoCard = document.getElementById("info-card")!;
+  const infoName = document.getElementById("info-name")!;
+  const infoRows = document.getElementById("info-rows")!;
+  document.getElementById("info-close")!.addEventListener("click", () => infoCard.classList.remove("show"));
+  const TYPE_LABELS: Record<string, string> = {
+    retail: "店舗", commercial: "商業ビル", apartments: "集合住宅", residential: "住宅",
+    house: "戸建住宅", detached: "戸建住宅", train_station: "駅舎", school: "学校",
+    office: "オフィス", hotel: "ホテル", yes: "建物",
+  };
+  rig.onSceneTap = (ray) => {
+    const hits = ray.intersectObjects(city.pickMeshes, false);
+    if (!hits.length || hits[0].faceIndex == null) {
+      infoCard.classList.remove("show");
+      return;
+    }
+    const idx = pickBuildingIndex(hits[0].object as THREE.Mesh, hits[0].faceIndex);
+    if (idx == null) {
+      infoCard.classList.remove("show");
+      return;
+    }
+    const b = data.buildings[idx];
+    infoName.textContent = b.n ?? TYPE_LABELS[b.t ?? "yes"] ?? "建物";
+    const floors = Math.max(1, Math.round(b.h / 3.2));
+    infoRows.innerHTML =
+      `<div><b>種別</b>${TYPE_LABELS[b.t ?? "yes"] ?? b.t ?? "建物"}</div>` +
+      `<div><b>高さ</b>${b.h.toFixed(1)} m（実測）</div>` +
+      `<div><b>階数</b>約 ${floors} 階（推定）</div>`;
+    infoCard.classList.add("show");
+  };
 
   const ui = setupUi({
     onMode: (mode) => {

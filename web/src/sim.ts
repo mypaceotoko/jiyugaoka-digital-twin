@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { CityData, Pt, Rail, Road } from "./types";
 
 /**
@@ -121,6 +122,8 @@ export class Simulation {
   private walkerHead!: THREE.InstancedMesh;
   private carBody!: THREE.InstancedMesh;
   private carCabin!: THREE.InstancedMesh;
+  private carWheels!: THREE.InstancedMesh;
+  private busWheels!: THREE.InstancedMesh;
   private busBody!: THREE.InstancedMesh;
   private busWindows!: THREE.InstancedMesh;
   private trainCars!: THREE.InstancedMesh;
@@ -143,8 +146,14 @@ export class Simulation {
     const n = this.walkers.length;
     if (!n) return;
 
-    const bodyGeo = new THREE.CapsuleGeometry(0.22, 0.75, 2, 6);
-    bodyGeo.translate(0, 0.82, 0);
+    // torso + two legs in one instanced geometry (tinted per person)
+    const torso = new THREE.CapsuleGeometry(0.21, 0.5, 2, 7);
+    torso.translate(0, 1.02, 0);
+    const legL = new THREE.CylinderGeometry(0.075, 0.065, 0.72, 5);
+    legL.translate(0.105, 0.36, 0);
+    const legR = legL.clone();
+    legR.translate(-0.21, 0, 0);
+    const bodyGeo = mergeGeometries([torso, legL, legR], false)!;
     this.walkerBody = new THREE.InstancedMesh(bodyGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), n);
     const headGeo = new THREE.SphereGeometry(0.15, 6, 5);
     headGeo.translate(0, 1.52, 0);
@@ -174,8 +183,11 @@ export class Simulation {
     const n = this.cars.length;
     if (!n) return;
 
-    const bodyGeo = new THREE.BoxGeometry(1.7, 0.95, 3.9);
-    bodyGeo.translate(0, 0.65, 0);
+    const shell = new THREE.BoxGeometry(1.7, 0.78, 3.9);
+    shell.translate(0, 0.76, 0);
+    const skirt = new THREE.BoxGeometry(1.62, 0.3, 3.6);
+    skirt.translate(0, 0.34, 0);
+    const bodyGeo = mergeGeometries([shell, skirt], false)!;
     this.carBody = new THREE.InstancedMesh(bodyGeo, new THREE.MeshLambertMaterial({ color: 0xffffff }), n);
     const cabinGeo = new THREE.BoxGeometry(1.5, 0.6, 1.9);
     cabinGeo.translate(0, 1.4, -0.2);
@@ -185,10 +197,25 @@ export class Simulation {
       c.setHex(CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)]);
       this.carBody.setColorAt(i, c);
     }
+    // four wheels per car as one instanced geometry
+    const wheelOne = new THREE.CylinderGeometry(0.31, 0.31, 0.2, 8);
+    wheelOne.rotateZ(Math.PI / 2);
+    const wheelGeos: THREE.BufferGeometry[] = [];
+    for (const [wx, wz] of [[0.78, 1.25], [-0.78, 1.25], [0.78, -1.25], [-0.78, -1.25]]) {
+      wheelGeos.push(wheelOne.clone().translate(wx, 0.31, wz));
+    }
+    wheelOne.dispose();
+    this.carWheels = new THREE.InstancedMesh(
+      mergeGeometries(wheelGeos, false)!,
+      new THREE.MeshLambertMaterial({ color: 0x1d1e22 }),
+      n,
+    );
+    wheelGeos.forEach((g) => g.dispose());
+    this.carWheels.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.carBody.castShadow = true;
     this.carBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.carCabin.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.group.add(this.carBody, this.carCabin);
+    this.group.add(this.carBody, this.carCabin, this.carWheels);
     for (let i = 0; i < n; i++) {
       this.carSnapshots.push({ x: 0, y: 0, z: 0, id: `VEH-${String(i + 1).padStart(3, "0")}` });
     }
@@ -203,8 +230,8 @@ export class Simulation {
     const n = this.buses.length;
     if (!n) return;
 
-    const bodyGeo = new THREE.BoxGeometry(2.5, 3.0, 10.6);
-    bodyGeo.translate(0, 1.8, 0);
+    const bodyGeo = new THREE.BoxGeometry(2.5, 2.7, 10.6);
+    bodyGeo.translate(0, 1.95, 0);
     this.busBody = new THREE.InstancedMesh(
       bodyGeo,
       new THREE.MeshLambertMaterial({ color: 0xffffff }),
@@ -223,10 +250,24 @@ export class Simulation {
       c.setHex(liveries[i % liveries.length]);
       this.busBody.setColorAt(i, c);
     }
+    const busWheel = new THREE.CylinderGeometry(0.48, 0.48, 0.3, 8);
+    busWheel.rotateZ(Math.PI / 2);
+    const busWheelGeos: THREE.BufferGeometry[] = [];
+    for (const [wx, wz] of [[1.18, 3.4], [-1.18, 3.4], [1.18, -3.4], [-1.18, -3.4]]) {
+      busWheelGeos.push(busWheel.clone().translate(wx, 0.48, wz));
+    }
+    busWheel.dispose();
+    this.busWheels = new THREE.InstancedMesh(
+      mergeGeometries(busWheelGeos, false)!,
+      new THREE.MeshLambertMaterial({ color: 0x1d1e22 }),
+      n,
+    );
+    busWheelGeos.forEach((g) => g.dispose());
+    this.busWheels.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.busBody.castShadow = true;
     this.busBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.busWindows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.group.add(this.busBody, this.busWindows);
+    this.group.add(this.busBody, this.busWindows, this.busWheels);
     for (let i = 0; i < n; i++) {
       this.busSnapshots.push({ x: 0, y: 0, z: 0, id: `BUS-${String(i + 1).padStart(2, "0")}` });
     }
@@ -321,11 +362,13 @@ export class Simulation {
         d.updateMatrix();
         this.carBody.setMatrixAt(i, d.matrix);
         this.carCabin.setMatrixAt(i, d.matrix);
+        this.carWheels.setMatrixAt(i, d.matrix);
         const cs = this.carSnapshots[i];
         cs.x = smp.x; cs.y = car.y + 2; cs.z = smp.z;
       });
       this.carBody.instanceMatrix.needsUpdate = true;
       this.carCabin.instanceMatrix.needsUpdate = true;
+      this.carWheels.instanceMatrix.needsUpdate = true;
     }
 
     if (this.busBody) {
@@ -339,11 +382,13 @@ export class Simulation {
         d.updateMatrix();
         this.busBody.setMatrixAt(i, d.matrix);
         this.busWindows.setMatrixAt(i, d.matrix);
+        this.busWheels.setMatrixAt(i, d.matrix);
         const bs = this.busSnapshots[i];
         bs.x = smp.x; bs.y = bus.y + 3.4; bs.z = smp.z;
       });
       this.busBody.instanceMatrix.needsUpdate = true;
       this.busWindows.instanceMatrix.needsUpdate = true;
+      this.busWheels.instanceMatrix.needsUpdate = true;
     }
 
     if (this.trainCars) {

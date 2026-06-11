@@ -146,7 +146,7 @@ export function buildStreetscape(data: CityData, lightPositions: Pt[], excludeRo
       new THREE.MeshLambertMaterial({ color: 0x6b4f35 }),
       spots.length,
     );
-    const crownGeo = new THREE.IcosahedronGeometry(1.7, 0);
+    const crownGeo = new THREE.IcosahedronGeometry(1.7, 1);
     crownGeo.translate(0, 3.1, 0);
     const crowns = new THREE.InstancedMesh(
       crownGeo,

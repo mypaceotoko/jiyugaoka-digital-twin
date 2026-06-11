@@ -10,6 +10,31 @@ export interface CityMeshes {
   lightPositions: Pt[];
   buildingMaterial: THREE.MeshStandardMaterial; // upper facade (windows glow at night)
   storefrontMaterial: THREE.MeshStandardMaterial; // ground floor (shop glow at night)
+  /** merged building meshes carrying userData.ranges for tap-picking */
+  pickMeshes: THREE.Mesh[];
+}
+
+interface PickRange {
+  start: number; // first vertex of this building in the merged geometry
+  end: number;
+  idx: number; // index into data.buildings
+}
+
+/** Resolve a raycast hit on a merged building mesh to the source building index. */
+export function pickBuildingIndex(mesh: THREE.Mesh, faceIndex: number): number | null {
+  const ranges = mesh.userData.ranges as PickRange[] | undefined;
+  if (!ranges) return null;
+  const geo = mesh.geometry as THREE.BufferGeometry;
+  const vi = geo.index ? geo.index.getX(faceIndex * 3) : faceIndex * 3;
+  let lo = 0;
+  let hi = ranges.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (vi < ranges[mid].start) hi = mid - 1;
+    else if (vi >= ranges[mid].end) lo = mid + 1;
+    else return ranges[mid].idx;
+  }
+  return null;
 }
 
 const DISPLAY_RADIUS = 320;
@@ -150,18 +175,26 @@ function buildBuildings(buildings: Building[]): {
   const upperGeos: THREE.BufferGeometry[] = [];
   const bandGeos: THREE.BufferGeometry[] = [];
   const roofGeos: THREE.BufferGeometry[] = [];
+  const upperIdx: number[] = [];
+  const bandIdx: number[] = [];
+  const roofIdx: number[] = [];
   buildings.forEach((b, i) => {
     if (b.f.length < 3) return;
     const color = buildingColor(b, i);
     try {
       const { upper, band } = buildingWallGeometry(b, color, awningColor(b, i));
-      if (upper) upperGeos.push(upper);
+      if (upper) {
+        upperGeos.push(upper);
+        upperIdx.push(i);
+      }
       bandGeos.push(band);
+      bandIdx.push(i);
       const roof = new THREE.ShapeGeometry(footprintShape(b.f));
       roof.rotateX(-Math.PI / 2);
       roof.translate(0, b.h, 0);
       const roofColor = color.clone().multiplyScalar(0.8).lerp(new THREE.Color(0x8d8d8a), 0.35);
       roofGeos.push(withColor(roof, roofColor));
+      roofIdx.push(i);
     } catch {
       /* skip malformed footprint */
     }
@@ -192,19 +225,27 @@ function buildBuildings(buildings: Building[]): {
   const roofMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
 
   const meshes: THREE.Mesh[] = [];
-  const add = (geos: THREE.BufferGeometry[], mat: THREE.Material, name: string) => {
+  const add = (geos: THREE.BufferGeometry[], idxs: number[], mat: THREE.Material, name: string) => {
     if (!geos.length) return;
+    const ranges: PickRange[] = [];
+    let offset = 0;
+    geos.forEach((g, k) => {
+      const count = g.attributes.position.count;
+      ranges.push({ start: offset, end: offset + count, idx: idxs[k] });
+      offset += count;
+    });
     const merged = mergeGeometries(geos, false)!;
     geos.forEach((g) => g.dispose());
     const mesh = new THREE.Mesh(merged, mat);
     mesh.name = name;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    mesh.userData.ranges = ranges;
     meshes.push(mesh);
   };
-  add(upperGeos, facade, "buildingWalls");
-  add(bandGeos, storefront, "buildingStorefronts");
-  add(roofGeos, roofMat, "buildingRoofs");
+  add(upperGeos, upperIdx, facade, "buildingWalls");
+  add(bandGeos, bandIdx, storefront, "buildingStorefronts");
+  add(roofGeos, roofIdx, roofMat, "buildingRoofs");
   return { meshes, facade, storefront };
 }
 
@@ -515,5 +556,6 @@ export function buildCity(data: CityData): CityMeshes {
     lightPositions,
     buildingMaterial: facade,
     storefrontMaterial: storefront,
+    pickMeshes: meshes,
   };
 }
