@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch OpenStreetMap data for the Jiyugaoka target area via the Overpass API.
+"""Fetch OpenStreetMap data for the Jiyugaoka target area via the Overpass API. (rev 2)
 
 Output: data/raw/osm/osm_raw.json (Overpass JSON) + fetch metadata.
 
