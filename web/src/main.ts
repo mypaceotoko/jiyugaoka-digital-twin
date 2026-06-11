@@ -4,6 +4,7 @@ import { Monitor } from "./monitor";
 import { buildCity } from "./city";
 import { Environment } from "./environment";
 import { Simulation } from "./sim";
+import { buildGreenway } from "./greenway";
 import { buildStreetscape } from "./streetscape";
 import { makeLabelSprite } from "./textures";
 import type { CityData } from "./types";
@@ -39,7 +40,9 @@ async function init(): Promise<void> {
 
   const city = buildCity(data);
   scene.add(city.group);
-  scene.add(buildStreetscape(data, city.lightPositions));
+  const greenway = buildGreenway(data);
+  scene.add(greenway.group);
+  scene.add(buildStreetscape(data, city.lightPositions, greenway.roads));
 
   const sim = new Simulation(data);
   scene.add(sim.group);
@@ -147,6 +150,7 @@ async function init(): Promise<void> {
     }
     rig.update(dt);
     sim.update(simDt, time);
+    greenway.update(dt);
     monitor.update(rig.camera, sim);
     renderer.render(scene, rig.camera);
     degradeFrames++;

@@ -13,11 +13,11 @@ function pointInPolygon(x: number, z: number, ring: Pt[]): boolean {
   return inside;
 }
 
-function treeSpots(roads: Road[], green: Area[]): Pt[] {
+function treeSpots(roads: Road[], green: Area[], exclude?: Set<Road>): Pt[] {
   const out: Pt[] = [];
   // along walkable streets
   for (const r of roads) {
-    if (!TREE_ROADS.has(r.t)) continue;
+    if (!TREE_ROADS.has(r.t) || exclude?.has(r)) continue;
     let acc = 14; // phase-shift vs street lights
     let side = -1;
     for (let i = 1; i < r.p.length; i++) {
@@ -131,13 +131,13 @@ function buildRooftopClutter(buildings: Building[]): THREE.Group {
 }
 
 /** Static greenery + street furniture (instanced; a handful of draw calls). */
-export function buildStreetscape(data: CityData, lightPositions: Pt[]): THREE.Group {
+export function buildStreetscape(data: CityData, lightPositions: Pt[], excludeRoads?: Set<Road>): THREE.Group {
   const group = new THREE.Group();
   group.name = "streetscape";
   const dummy = new THREE.Object3D();
 
   // --- trees ---
-  const spots = treeSpots(data.roads, data.green);
+  const spots = treeSpots(data.roads, data.green, excludeRoads);
   if (spots.length) {
     const trunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 2.4, 5);
     trunkGeo.translate(0, 1.2, 0);

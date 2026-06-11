@@ -135,6 +135,31 @@ export function makeGroundTexture(): THREE.Texture {
   return tex;
 }
 
+/** Warm brick-paver tile for the greenway promenade. */
+export function makePaverTexture(): THREE.Texture {
+  const S = 128;
+  const [c, g] = makeCanvas(S);
+  g.fillStyle = "#b9a890";
+  g.fillRect(0, 0, S, S);
+  const colors = ["#c4b29a", "#b39f86", "#bfa98c", "#ad9a82", "#c9b8a2", "#a8927a"];
+  const bw = S / 4, bh = S / 8;
+  for (let row = 0; row < 8; row++) {
+    const off = row % 2 ? bw / 2 : 0;
+    for (let col = -1; col < 5; col++) {
+      g.fillStyle = colors[(row * 5 + col + 6) % colors.length];
+      g.fillRect(col * bw + off + 1, row * bh + 1, bw - 2, bh - 2);
+    }
+  }
+  // mortar joints darkening
+  g.fillStyle = "rgba(60,50,40,0.18)";
+  for (let row = 0; row <= 8; row++) g.fillRect(0, row * bh - 1, S, 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 /** Floating text label (e.g. station name). */
 export function makeLabelSprite(text: string, sub?: string): THREE.Sprite {
   const c = document.createElement("canvas");
