@@ -58,10 +58,24 @@ async function init(): Promise<void> {
   let dayClock = 6; // start at dawn
   let lastPreset: TimeOfDay = "day";
 
+  const overviewBtn = document.getElementById("btn-overview")!;
+  const tapHint = document.getElementById("tap-hint")!;
+  let hintDone = false;
+  rig.onAerialFocus = (focused) => {
+    overviewBtn.classList.toggle("show", focused);
+    if (focused) {
+      hintDone = true;
+      tapHint.classList.add("hidden");
+    }
+  };
+  overviewBtn.addEventListener("click", () => rig.resetAerial());
+  setTimeout(() => tapHint.classList.add("hidden"), 8000);
+
   const ui = setupUi({
     onMode: (mode) => {
       rig.setMode(mode);
       stationLabel.visible = mode !== "ground";
+      tapHint.classList.toggle("hidden", hintDone || mode !== "aerial");
     },
     onTime: (time) => {
       lastPreset = time;
