@@ -184,6 +184,7 @@ for (const way of ways.values()) {
         w: ROAD_WIDTHS[t.highway] ?? 4,
         t: t.highway,
       };
+      if (t.name) road.n = t.name; // street names (e.g. 九品仏川緑道) for landmark detailing
       if (t.bridge && t.bridge !== "no") road.b = 1;
       const ly = parseInt(t.layer, 10);
       if (!Number.isNaN(ly) && ly !== 0) road.ly = ly;
