@@ -68,6 +68,73 @@ export function makeFacadeTextures(): FacadeTextures {
   return { map, emissiveMap };
 }
 
+/** Ground-floor storefront strip: glass front + awning band (tinted by vertex color). */
+export function makeStorefrontTextures(): FacadeTextures {
+  const W = 256, H = 128;
+  const [c, g] = makeCanvas(W);
+  c.height = H;
+  // wall base
+  g.fillStyle = "#f2f0ea";
+  g.fillRect(0, 0, W, H);
+  // awning band (top 22%) — near-white so vertex color tints it
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, W, H * 0.22);
+  g.fillStyle = "rgba(0,0,0,0.10)";
+  for (let x = 0; x < W; x += 16) g.fillRect(x, 0, 8, H * 0.22); // awning stripes
+  // glass front
+  const gy = H * 0.26, gh = H * 0.62;
+  g.fillStyle = "#5a6670";
+  g.fillRect(6, gy, W - 12, gh);
+  const grad = g.createLinearGradient(0, gy, 0, gy + gh);
+  grad.addColorStop(0, "rgba(255,255,255,0.28)");
+  grad.addColorStop(0.4, "rgba(255,255,255,0.05)");
+  grad.addColorStop(1, "rgba(0,0,0,0.18)");
+  g.fillStyle = grad;
+  g.fillRect(6, gy, W - 12, gh);
+  // mullions + door
+  g.fillStyle = "#3c4248";
+  for (let x = 64; x < W; x += 64) g.fillRect(x - 2, gy, 4, gh);
+  g.fillRect(W / 2 - 14, gy + gh * 0.25, 28, gh * 0.75);
+  const map = new THREE.CanvasTexture(c);
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 4;
+
+  // emissive: warm glow from the glass area
+  const [ec, eg] = makeCanvas(W);
+  ec.height = H;
+  eg.fillStyle = "#000000";
+  eg.fillRect(0, 0, W, H);
+  eg.fillStyle = "#ffd9a0";
+  eg.fillRect(6, gy, W - 12, gh);
+  eg.fillStyle = "rgba(0,0,0,0.45)";
+  for (let x = 64; x < W; x += 64) eg.fillRect(x - 2, gy, 4, gh);
+  const emissiveMap = new THREE.CanvasTexture(ec);
+  emissiveMap.wrapS = emissiveMap.wrapT = THREE.RepeatWrapping;
+  emissiveMap.colorSpace = THREE.SRGBColorSpace;
+  return { map, emissiveMap };
+}
+
+/** Subtle gray noise for the ground plane (breaks up flat shading). */
+export function makeGroundTexture(): THREE.Texture {
+  const S = 256;
+  const [c, g] = makeCanvas(S);
+  const img = g.createImageData(S, S);
+  for (let i = 0; i < S * S; i++) {
+    const v = 232 + Math.floor(Math.random() * 18) - 9;
+    img.data[i * 4] = v;
+    img.data[i * 4 + 1] = v;
+    img.data[i * 4 + 2] = v - 3;
+    img.data[i * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(56, 56);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** Floating text label (e.g. station name). */
 export function makeLabelSprite(text: string, sub?: string): THREE.Sprite {
   const c = document.createElement("canvas");

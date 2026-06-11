@@ -94,6 +94,7 @@ function makeAgents(
 
 const WALK_ROADS = new Set(["pedestrian", "footway", "path", "living_street", "residential", "steps"]);
 const DRIVE_ROADS = new Set(["primary", "secondary", "tertiary", "residential", "unclassified"]);
+const BUS_ROADS = new Set(["primary", "secondary", "tertiary"]); // bus routes stick to main streets
 
 const CLOTHES = [0x3a4a6b, 0x6b3a3a, 0x46663d, 0x55505e, 0x8a7f6a, 0xb0b4bb, 0x2e2e34, 0x7a5c47];
 const CAR_COLORS = [0xd8d8da, 0x2b2b30, 0x9aa0a8, 0x5d6b7a, 0x8c3030, 0x3d5a4f, 0xcfc8b8];
@@ -110,14 +111,18 @@ export class Simulation {
   /** world positions updated every frame — consumed by the monitor overlay */
   readonly walkerSnapshots: AgentSnapshot[] = [];
   readonly carSnapshots: AgentSnapshot[] = [];
+  readonly busSnapshots: AgentSnapshot[] = [];
   readonly trainSnapshots: AgentSnapshot[] = [];
   private walkers: PathAgent[] = [];
   private cars: PathAgent[] = [];
+  private buses: PathAgent[] = [];
   private trains: { agent: PathAgent; carCount: number; spacing: number }[] = [];
   private walkerBody!: THREE.InstancedMesh;
   private walkerHead!: THREE.InstancedMesh;
   private carBody!: THREE.InstancedMesh;
   private carCabin!: THREE.InstancedMesh;
+  private busBody!: THREE.InstancedMesh;
+  private busWindows!: THREE.InstancedMesh;
   private trainCars!: THREE.InstancedMesh;
   private dummy = new THREE.Object3D();
   private sampled = { x: 0, z: 0, hx: 0, hz: 1 };
@@ -126,6 +131,7 @@ export class Simulation {
     this.group.name = "simulation";
     this.initWalkers(data.roads);
     this.initCars(data.roads);
+    this.initBuses(data.roads);
     this.initTrains(data.rails);
   }
 
@@ -149,6 +155,7 @@ export class Simulation {
       c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
       this.walkerBody.setColorAt(i, c);
     }
+    this.walkerBody.castShadow = true;
     this.walkerBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.walkerHead.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.walkerBody, this.walkerHead);
@@ -178,11 +185,50 @@ export class Simulation {
       c.setHex(CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)]);
       this.carBody.setColorAt(i, c);
     }
+    this.carBody.castShadow = true;
     this.carBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.carCabin.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.carBody, this.carCabin);
     for (let i = 0; i < n; i++) {
       this.carSnapshots.push({ x: 0, y: 0, z: 0, id: `VEH-${String(i + 1).padStart(3, "0")}` });
+    }
+  }
+
+  private initBuses(roads: Road[]): void {
+    const routes = roads
+      .filter((r) => BUS_ROADS.has(r.t) && (!r.ly || r.ly <= 0))
+      .map((r) => ({ p: r.p, w: r.w, y: 0.1 }));
+    this.buses = makeAgents(routes, 6, [3.2, 5], 0);
+    for (const bus of this.buses) bus.offset = 1.9 * bus.dir; // keep-left, wide vehicle
+    const n = this.buses.length;
+    if (!n) return;
+
+    const bodyGeo = new THREE.BoxGeometry(2.5, 3.0, 10.6);
+    bodyGeo.translate(0, 1.8, 0);
+    this.busBody = new THREE.InstancedMesh(
+      bodyGeo,
+      new THREE.MeshLambertMaterial({ color: 0xffffff }),
+      n,
+    );
+    const winGeo = new THREE.BoxGeometry(2.56, 0.95, 9.4);
+    winGeo.translate(0, 2.55, 0);
+    this.busWindows = new THREE.InstancedMesh(
+      winGeo,
+      new THREE.MeshLambertMaterial({ color: 0x2c343c }),
+      n,
+    );
+    const liveries = [0x3a7d6a, 0xdcd8c8, 0x4a6d8c]; // generic city-bus colors
+    const c = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      c.setHex(liveries[i % liveries.length]);
+      this.busBody.setColorAt(i, c);
+    }
+    this.busBody.castShadow = true;
+    this.busBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.busWindows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.group.add(this.busBody, this.busWindows);
+    for (let i = 0; i < n; i++) {
+      this.busSnapshots.push({ x: 0, y: 0, z: 0, id: `BUS-${String(i + 1).padStart(2, "0")}` });
     }
   }
 
@@ -233,6 +279,7 @@ export class Simulation {
         this.trainCars.setColorAt(idx++, k % 2 === 0 ? new THREE.Color(0xd4d8dc) : accent.clone().lerp(new THREE.Color(0xd4d8dc), 0.75));
       }
     }
+    this.trainCars.castShadow = true;
     this.trainCars.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.trainCars);
     this.trains.forEach((_t, i) => {
@@ -279,6 +326,24 @@ export class Simulation {
       });
       this.carBody.instanceMatrix.needsUpdate = true;
       this.carCabin.instanceMatrix.needsUpdate = true;
+    }
+
+    if (this.busBody) {
+      this.buses.forEach((bus, i) => {
+        step(bus, dt);
+        bus.offset = 1.9 * bus.dir;
+        sample(bus, smp);
+        d.position.set(smp.x, bus.y, smp.z);
+        d.rotation.set(0, Math.atan2(smp.hx, smp.hz), 0);
+        d.scale.setScalar(1);
+        d.updateMatrix();
+        this.busBody.setMatrixAt(i, d.matrix);
+        this.busWindows.setMatrixAt(i, d.matrix);
+        const bs = this.busSnapshots[i];
+        bs.x = smp.x; bs.y = bus.y + 3.4; bs.z = smp.z;
+      });
+      this.busBody.instanceMatrix.needsUpdate = true;
+      this.busWindows.instanceMatrix.needsUpdate = true;
     }
 
     if (this.trainCars) {

@@ -20,9 +20,15 @@ export interface UiCallbacks {
   onTime(time: TimeOfDay): void;
   onJoystick(x: number, y: number): void;
   onMonitor(on: boolean): void;
+  onTimelapse(on: boolean): void;
 }
 
-export function setupUi(cb: UiCallbacks): void {
+export interface UiApi {
+  /** show the simulated clock on the time button (timelapse mode) */
+  setClock(text: string): void;
+}
+
+export function setupUi(cb: UiCallbacks): UiApi {
   const modeBtn = document.getElementById("btn-mode") as HTMLButtonElement;
   const timeBtn = document.getElementById("btn-time") as HTMLButtonElement;
   const joystickEl = document.getElementById("joystick") as HTMLDivElement;
@@ -45,8 +51,20 @@ export function setupUi(cb: UiCallbacks): void {
     cb.onMonitor(monitorOn);
   });
 
+  const lapseBtn = document.getElementById("btn-lapse") as HTMLButtonElement;
+  let lapseOn = false;
+  const setLapse = (on: boolean) => {
+    if (lapseOn === on) return;
+    lapseOn = on;
+    lapseBtn.textContent = on ? "⏩ タイムラプス ON" : "⏩ タイムラプス";
+    lapseBtn.classList.toggle("active", on);
+    cb.onTimelapse(on);
+  };
+  lapseBtn.addEventListener("click", () => setLapse(!lapseOn));
+
   let timeIdx = 0;
   timeBtn.addEventListener("click", () => {
+    if (lapseOn) setLapse(false); // manual presets cancel the timelapse
     timeIdx = (timeIdx + 1) % TIME_ORDER.length;
     const time = TIME_ORDER[timeIdx];
     timeBtn.textContent = TIME_LABELS[time];
@@ -95,6 +113,12 @@ export function setupUi(cb: UiCallbacks): void {
   modal.addEventListener("click", (e) => {
     if (e.target === modal) modal.classList.remove("open");
   });
+
+  return {
+    setClock(text: string) {
+      timeBtn.textContent = text;
+    },
+  };
 }
 
 export function hideLoading(): void {

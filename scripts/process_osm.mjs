@@ -71,6 +71,23 @@ function wayCoords(way) {
 }
 
 const dist = ([x, z]) => Math.hypot(x, z);
+const CLIP_R = 335;
+/** Split a polyline into runs that stay inside the display radius
+ *  (OSM ways can extend far beyond the fetch bbox). */
+function clipRuns(pts) {
+  const runs = [];
+  let cur = [];
+  for (const pt of pts) {
+    if (Math.hypot(pt[0], pt[1]) <= CLIP_R) {
+      cur.push(pt);
+    } else {
+      if (cur.length >= 2) runs.push(cur);
+      cur = [];
+    }
+  }
+  if (cur.length >= 2) runs.push(cur);
+  return runs;
+}
 const centroid = (pts) => {
   let x = 0, z = 0;
   for (const p of pts) { x += p[0]; z += p[1]; }
@@ -161,23 +178,27 @@ for (const way of ways.values()) {
   if (t.highway && !ROAD_SKIP.has(t.highway) && !t.building) {
     const p = wayCoords(way);
     if (p.length < 2 || !p.some((pt) => dist(pt) <= CLIP_LINE)) continue;
-    const road = {
-      p,
-      w: ROAD_WIDTHS[t.highway] ?? 4,
-      t: t.highway,
-    };
-    if (t.bridge && t.bridge !== "no") road.b = 1;
-    const ly = parseInt(t.layer, 10);
-    if (!Number.isNaN(ly) && ly !== 0) road.ly = ly;
-    roads.push(road);
+    for (const run of clipRuns(p)) {
+      const road = {
+        p: run,
+        w: ROAD_WIDTHS[t.highway] ?? 4,
+        t: t.highway,
+      };
+      if (t.bridge && t.bridge !== "no") road.b = 1;
+      const ly = parseInt(t.layer, 10);
+      if (!Number.isNaN(ly) && ly !== 0) road.ly = ly;
+      roads.push(road);
+    }
   } else if (t.railway === "rail" || t.railway === "light_rail") {
     const p = wayCoords(way);
     if (p.length < 2 || !p.some((pt) => dist(pt) <= CLIP_LINE)) continue;
     const ly = parseInt(t.layer, 10) || 0;
     const elevated = (t.bridge && t.bridge !== "no") || ly > 0;
-    const rail = { p, el: elevated ? Math.max(ly, 1) * 6 : 0 };
-    if (t.name) rail.n = t.name;
-    rails.push(rail);
+    for (const run of clipRuns(p)) {
+      const rail = { p: run, el: elevated ? Math.max(ly, 1) * 6 : 0 };
+      if (t.name) rail.n = t.name;
+      rails.push(rail);
+    }
   } else if (t.railway === "platform" && closed) {
     const f = wayCoords(way);
     if (f.length < 4 || dist(centroid(f)) > CLIP_LINE) continue;
