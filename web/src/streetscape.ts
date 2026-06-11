@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Area, CityData, Pt, Road } from "./types";
+import type { Area, Building, CityData, Pt, Road } from "./types";
 
 const TREE_ROADS = new Set(["pedestrian", "footway", "living_street", "residential"]);
 
@@ -56,6 +56,80 @@ function treeSpots(roads: Road[], green: Area[]): Pt[] {
   return out;
 }
 
+function polygonArea(f: Pt[]): number {
+  let a = 0;
+  for (let i = 0, j = f.length - 1; i < f.length; j = i++) {
+    a += (f[j][0] + f[i][0]) * (f[j][1] - f[i][1]);
+  }
+  return Math.abs(a / 2);
+}
+
+/** Rooftop AC units / water tanks on larger buildings (aerial-view detail). */
+function buildRooftopClutter(buildings: Building[]): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "rooftops";
+  const boxes: { x: number; y: number; z: number; s: number; r: number }[] = [];
+  const tanks: { x: number; y: number; z: number; s: number }[] = [];
+  buildings.forEach((b, i) => {
+    if (b.h < 8 || b.f.length < 3) return;
+    const area = polygonArea(b.f);
+    if (area < 90) return;
+    let cx = 0, cz = 0;
+    for (const p of b.f) { cx += p[0]; cz += p[1]; }
+    cx /= b.f.length; cz /= b.f.length;
+    const r1 = Math.sin(i * 12.9898) * 43758.5453;
+    const rnd = (k: number) => {
+      const v = Math.sin((i + k) * 78.233) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const jitter = Math.min(Math.sqrt(area) * 0.18, 6);
+    const n = 1 + Math.floor(rnd(1) * 2.4);
+    for (let k = 0; k < n; k++) {
+      boxes.push({
+        x: cx + (rnd(k * 2 + 2) - 0.5) * jitter * 2,
+        y: b.h,
+        z: cz + (rnd(k * 2 + 3) - 0.5) * jitter * 2,
+        s: 0.9 + rnd(k + 4) * 1.4,
+        r: rnd(k + 5) * Math.PI,
+      });
+    }
+    if (area > 220 && (r1 - Math.floor(r1)) < 0.3) {
+      tanks.push({ x: cx + (rnd(9) - 0.5) * jitter, y: b.h, z: cz + (rnd(10) - 0.5) * jitter, s: 1 });
+    }
+  });
+
+  const dummy = new THREE.Object3D();
+  if (boxes.length) {
+    const geo = new THREE.BoxGeometry(1.4, 0.9, 1.1);
+    geo.translate(0, 0.45, 0);
+    const mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xb9bcc2, roughness: 0.8 }), boxes.length);
+    boxes.forEach((bx, i) => {
+      dummy.position.set(bx.x, bx.y, bx.z);
+      dummy.scale.setScalar(bx.s);
+      dummy.rotation.set(0, bx.r, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.castShadow = true;
+    group.add(mesh);
+  }
+  if (tanks.length) {
+    const geo = new THREE.CylinderGeometry(1.1, 1.1, 2, 10);
+    geo.translate(0, 1, 0);
+    const mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xd9d4c8, roughness: 0.7 }), tanks.length);
+    tanks.forEach((t, i) => {
+      dummy.position.set(t.x, t.y, t.z);
+      dummy.scale.setScalar(t.s);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.castShadow = true;
+    group.add(mesh);
+  }
+  return group;
+}
+
 /** Static greenery + street furniture (instanced; a handful of draw calls). */
 export function buildStreetscape(data: CityData, lightPositions: Pt[]): THREE.Group {
   const group = new THREE.Group();
@@ -91,6 +165,8 @@ export function buildStreetscape(data: CityData, lightPositions: Pt[]): THREE.Gr
       c.setHSL(0.26 + Math.random() * 0.08, 0.45, 0.3 + Math.random() * 0.14);
       crowns.setColorAt(i, c);
     });
+    trunks.castShadow = true;
+    crowns.castShadow = true;
     group.add(trunks, crowns);
   }
 
@@ -110,8 +186,10 @@ export function buildStreetscape(data: CityData, lightPositions: Pt[]): THREE.Gr
       dummy.updateMatrix();
       poles.setMatrixAt(i, dummy.matrix);
     });
+    poles.castShadow = true;
     group.add(poles);
   }
 
+  group.add(buildRooftopClutter(data.buildings));
   return group;
 }

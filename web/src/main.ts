@@ -17,6 +17,9 @@ async function init(): Promise<void> {
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   app.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -44,7 +47,7 @@ async function init(): Promise<void> {
   stationLabel.position.set(0, 34, 0);
   scene.add(stationLabel);
 
-  const environment = new Environment(scene, city);
+  const environment = new Environment(scene, city, renderer);
   const monitor = new Monitor(data.pois);
 
   setupUi({
@@ -79,10 +82,18 @@ async function init(): Promise<void> {
     const fps = (degradeFrames * 1000) / (now - degradeTime);
     degradeFrames = 0;
     degradeTime = now;
-    if (fps > 5 && fps < 24 && tier < 2) {
+    if (fps > 5 && fps < 24 && tier < 3) {
       tier++;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier === 1 ? 1.5 : 1));
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      if (tier === 1) {
+        environment.setShadowQuality(1); // smaller shadow map first
+      } else if (tier === 2) {
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      } else {
+        environment.setShadowQuality(2); // shadows off as a last resort
+        renderer.setPixelRatio(1);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
     }
   }, 3000);
 

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { makeFacadeTextures } from "./textures";
+import { makeFacadeTextures, makeGroundTexture, makeStorefrontTextures } from "./textures";
 import type { Area, Building, CityData, Pt, Rail, Road } from "./types";
 
 export interface CityMeshes {
@@ -8,17 +8,21 @@ export interface CityMeshes {
   ground: THREE.Mesh;
   streetLights: THREE.Points;
   lightPositions: Pt[];
-  buildingMaterial: THREE.MeshLambertMaterial; // facade (windows glow at night)
+  buildingMaterial: THREE.MeshStandardMaterial; // upper facade (windows glow at night)
+  storefrontMaterial: THREE.MeshStandardMaterial; // ground floor (shop glow at night)
 }
 
 const DISPLAY_RADIUS = 320;
 const FLOOR = 3.2; // meters per window cell
+const BAND_H = 3.4; // ground-floor storefront height
 
 // deterministic pseudo-random (stable colors across loads)
 function hash01(i: number): number {
   const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 }
+
+const AWNING = [0x9c2f38, 0x2f5d3f, 0x2e4668, 0xb07d2e, 0x8a4a2e, 0x3c3c41, 0x6e2f5d];
 
 function buildingColor(b: Building, i: number): THREE.Color {
   const r1 = hash01(i);
@@ -38,15 +42,58 @@ function buildingColor(b: Building, i: number): THREE.Color {
   return c;
 }
 
-/** Walls as textured quads (u: 1 window per FLOOR meters, v: 1 per floor). */
-function buildingWallGeometry(b: Building, color: THREE.Color): THREE.BufferGeometry {
+function awningColor(b: Building, i: number): THREE.Color {
+  const retail = b.t === "retail" || b.t === "commercial" || !!b.n;
+  const r = hash01(i * 13 + 5);
+  if (retail || r < 0.4) {
+    const c = new THREE.Color(AWNING[Math.floor(hash01(i * 3 + 1) * AWNING.length)]);
+    c.offsetHSL(0, 0, (r - 0.5) * 0.08);
+    return c;
+  }
+  return buildingColor(b, i).multiplyScalar(0.88);
+}
+
+interface WallGeos {
+  upper: THREE.BufferGeometry | null;
+  band: THREE.BufferGeometry;
+}
+
+/** Walls split into a storefront band (0..BAND_H) and upper window floors. */
+function buildingWallGeometry(b: Building, color: THREE.Color, accent: THREE.Color): WallGeos {
   const f = b.f;
   const n = f.length;
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const uvs: number[] = [];
-  const colors: number[] = [];
-  const dark = color.clone().multiplyScalar(0.66); // grounded base, fake AO
+  const bandH = Math.min(b.h, BAND_H);
+  const hasUpper = b.h > BAND_H + 0.3;
+
+  const mk = () => ({ pos: [] as number[], nor: [] as number[], uv: [] as number[], col: [] as number[] });
+  const band = mk();
+  const upper = mk();
+
+  const pushQuad = (
+    dst: ReturnType<typeof mk>,
+    x0: number, z0: number, x1: number, z1: number,
+    y0: number, y1: number, nx: number, nz: number,
+    u1: number, v0: number, v1: number,
+    cBottom: THREE.Color, cTop: THREE.Color,
+  ) => {
+    const quadPos = [
+      [x0, y0, z0], [x1, y0, z1], [x1, y1, z1],
+      [x0, y0, z0], [x1, y1, z1], [x0, y1, z0],
+    ];
+    const quadUv = [
+      [0, v0], [u1, v0], [u1, v1],
+      [0, v0], [u1, v1], [0, v1],
+    ];
+    const quadCol = [cBottom, cBottom, cTop, cBottom, cTop, cTop];
+    for (let k = 0; k < 6; k++) {
+      dst.pos.push(...quadPos[k]);
+      dst.nor.push(nx, 0, nz);
+      dst.uv.push(...quadUv[k]);
+      dst.col.push(quadCol[k].r, quadCol[k].g, quadCol[k].b);
+    }
+  };
+
+  const upperDark = color.clone().multiplyScalar(0.82);
   for (let i = 0; i < n; i++) {
     const [x0, z0] = f[i];
     const [x1, z1] = f[(i + 1) % n];
@@ -55,30 +102,23 @@ function buildingWallGeometry(b: Building, color: THREE.Color): THREE.BufferGeom
     const nx = (z1 - z0) / len;
     const nz = -(x1 - x0) / len;
     const u1 = Math.max(1, Math.round(len / FLOOR));
-    const v1 = Math.max(1, Math.round(b.h / FLOOR));
-    // two triangles: b0,b1,t1  b0,t1,t0
-    const quadPos = [
-      [x0, 0, z0], [x1, 0, z1], [x1, b.h, z1],
-      [x0, 0, z0], [x1, b.h, z1], [x0, b.h, z0],
-    ];
-    const quadUv = [
-      [0, 0], [u1, 0], [u1, v1],
-      [0, 0], [u1, v1], [0, v1],
-    ];
-    const quadCol = [dark, dark, color, dark, color, color];
-    for (let k = 0; k < 6; k++) {
-      positions.push(...quadPos[k]);
-      normals.push(nx, 0, nz);
-      uvs.push(...quadUv[k]);
-      colors.push(quadCol[k].r, quadCol[k].g, quadCol[k].b);
+    // storefront band: single texture tile vertically
+    pushQuad(band, x0, z0, x1, z1, 0, bandH, nx, nz, u1, 0, 1, accent, accent);
+    if (hasUpper) {
+      const v1 = Math.max(1, Math.round((b.h - bandH) / FLOOR));
+      pushQuad(upper, x0, z0, x1, z1, bandH, b.h, nx, nz, u1, 0, v1, upperDark, color);
     }
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
-  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  return geo;
+
+  const toGeo = (d: ReturnType<typeof mk>) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(d.pos, 3));
+    geo.setAttribute("normal", new THREE.Float32BufferAttribute(d.nor, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(d.uv, 2));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(d.col, 3));
+    return geo;
+  };
+  return { upper: hasUpper ? toGeo(upper) : null, band: toGeo(band) };
 }
 
 function withColor(geo: THREE.BufferGeometry, color: THREE.Color): THREE.BufferGeometry {
@@ -103,17 +143,20 @@ function footprintShape(f: Pt[]): THREE.Shape {
 }
 
 function buildBuildings(buildings: Building[]): {
-  walls: THREE.Mesh;
-  roofs: THREE.Mesh;
-  material: THREE.MeshLambertMaterial;
+  meshes: THREE.Mesh[];
+  facade: THREE.MeshStandardMaterial;
+  storefront: THREE.MeshStandardMaterial;
 } {
-  const wallGeos: THREE.BufferGeometry[] = [];
+  const upperGeos: THREE.BufferGeometry[] = [];
+  const bandGeos: THREE.BufferGeometry[] = [];
   const roofGeos: THREE.BufferGeometry[] = [];
   buildings.forEach((b, i) => {
     if (b.f.length < 3) return;
     const color = buildingColor(b, i);
     try {
-      wallGeos.push(buildingWallGeometry(b, color));
+      const { upper, band } = buildingWallGeometry(b, color, awningColor(b, i));
+      if (upper) upperGeos.push(upper);
+      bandGeos.push(band);
       const roof = new THREE.ShapeGeometry(footprintShape(b.f));
       roof.rotateX(-Math.PI / 2);
       roof.translate(0, b.h, 0);
@@ -124,28 +167,55 @@ function buildBuildings(buildings: Building[]): {
     }
   });
 
-  const { map, emissiveMap } = makeFacadeTextures();
-  const material = new THREE.MeshLambertMaterial({
+  const win = makeFacadeTextures();
+  const facade = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    map,
-    emissiveMap,
+    map: win.map,
+    emissiveMap: win.emissiveMap,
     emissive: new THREE.Color(0xffc88a),
     emissiveIntensity: 0,
+    roughness: 0.82,
+    metalness: 0.02,
     side: THREE.DoubleSide,
   });
-  const walls = new THREE.Mesh(mergeGeometries(wallGeos, false)!, material);
-  walls.name = "buildingWalls";
-  wallGeos.forEach((g) => g.dispose());
+  const shop = makeStorefrontTextures();
+  const storefront = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    map: shop.map,
+    emissiveMap: shop.emissiveMap,
+    emissive: new THREE.Color(0xfff0cf),
+    emissiveIntensity: 0,
+    roughness: 0.6,
+    metalness: 0.05,
+    side: THREE.DoubleSide,
+  });
+  const roofMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
 
-  const roofMerged = mergeGeometries(roofGeos, false)!;
-  roofGeos.forEach((g) => g.dispose());
-  const roofs = new THREE.Mesh(roofMerged, new THREE.MeshLambertMaterial({ vertexColors: true }));
-  roofs.name = "buildingRoofs";
-  return { walls, roofs, material };
+  const meshes: THREE.Mesh[] = [];
+  const add = (geos: THREE.BufferGeometry[], mat: THREE.Material, name: string) => {
+    if (!geos.length) return;
+    const merged = mergeGeometries(geos, false)!;
+    geos.forEach((g) => g.dispose());
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.name = name;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    meshes.push(mesh);
+  };
+  add(upperGeos, facade, "buildingWalls");
+  add(bandGeos, storefront, "buildingStorefronts");
+  add(roofGeos, roofMat, "buildingRoofs");
+  return { meshes, facade, storefront };
 }
 
-/** Flat ribbon along a polyline (indexed geometry, y constant). */
-function ribbonGeometry(p: Pt[], width: number, y: number, color: THREE.Color): THREE.BufferGeometry | null {
+/** Flat ribbon along a polyline (indexed, y constant, optional lateral offset). */
+function ribbonGeometry(
+  p: Pt[],
+  width: number,
+  y: number,
+  color: THREE.Color,
+  centerOffset = 0,
+): THREE.BufferGeometry | null {
   const pts = p.filter((pt, i) => i === 0 || Math.hypot(pt[0] - p[i - 1][0], pt[1] - p[i - 1][1]) > 0.01);
   if (pts.length < 2) return null;
   const n = pts.length;
@@ -163,7 +233,8 @@ function ribbonGeometry(p: Pt[], width: number, y: number, color: THREE.Color): 
     dx /= len;
     dz /= len;
     const px = -dz, pz = dx; // perpendicular in XZ
-    const [x, z] = pts[i];
+    const x = pts[i][0] + px * centerOffset;
+    const z = pts[i][1] + pz * centerOffset;
     positions.set([x + px * half, y, z + pz * half], i * 6);
     positions.set([x - px * half, y, z - pz * half], i * 6 + 3);
     for (let k = 0; k < 2; k++) colors.set([color.r, color.g, color.b], i * 6 + k * 3);
@@ -187,6 +258,8 @@ const ROAD_COLORS: Record<string, number> = {
   service: 0x57585c, pedestrian: 0x9b8c79, footway: 0xa3937e, path: 0x97896c,
   steps: 0x8a7c6c, cycleway: 0x7a7468, track: 0x84765f,
 };
+const SIDEWALK_ROADS = new Set(["primary", "secondary", "tertiary", "residential", "unclassified"]);
+const LINE_ROADS = new Set(["primary", "secondary", "tertiary"]);
 
 function roadY(r: Road): number {
   const layer = r.ly && r.ly > 0 ? r.ly * 6 : 0;
@@ -194,19 +267,67 @@ function roadY(r: Road): number {
   return 0.06 + layer + minor;
 }
 
-function buildRoads(roads: Road[]): THREE.Mesh {
+function buildRoads(roads: Road[]): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "roads";
   const geos: THREE.BufferGeometry[] = [];
+  const walkGeos: THREE.BufferGeometry[] = [];
+  const lineGeos: THREE.BufferGeometry[] = [];
   const c = new THREE.Color();
+  const sidewalkColor = new THREE.Color(0xb9b2a4);
+  const lineColor = new THREE.Color(0xd9d9d2);
+
   for (const r of roads) {
     c.setHex(ROAD_COLORS[r.t] ?? 0x4f5156);
-    const g = ribbonGeometry(r.p, r.w, roadY(r), c);
+    const y = roadY(r);
+    const g = ribbonGeometry(r.p, r.w, y, c);
     if (g) geos.push(g);
+
+    if (SIDEWALK_ROADS.has(r.t) && (!r.ly || r.ly <= 0) && !r.b) {
+      for (const side of [1, -1]) {
+        const sw = ribbonGeometry(r.p, 1.7, 0.045, sidewalkColor, side * (r.w / 2 + 0.85));
+        if (sw) walkGeos.push(sw);
+      }
+    }
+    if (LINE_ROADS.has(r.t)) {
+      // dashed center line
+      let acc = 0;
+      for (let i = 1; i < r.p.length; i++) {
+        const [x0, z0] = r.p[i - 1];
+        const [x1, z1] = r.p[i];
+        const seg = Math.hypot(x1 - x0, z1 - z0);
+        if (seg < 0.01) continue;
+        const dx = (x1 - x0) / seg, dz = (z1 - z0) / seg;
+        let pos = 0;
+        while (pos < seg) {
+          const phase = (acc + pos) % 6.5;
+          if (phase < 2.5) {
+            const dashLen = Math.min(2.5 - phase, seg - pos);
+            const sx = x0 + dx * pos, sz = z0 + dz * pos;
+            const ex = sx + dx * dashLen, ez = sz + dz * dashLen;
+            const d = ribbonGeometry([[sx, sz], [ex, ez]], 0.16, y + 0.015, lineColor);
+            if (d) lineGeos.push(d);
+            pos += dashLen;
+          } else {
+            pos += 6.5 - phase;
+          }
+        }
+        acc += seg;
+      }
+    }
   }
-  const merged = mergeGeometries(geos, false)!;
-  geos.forEach((g) => g.dispose());
-  const mesh = new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true }));
-  mesh.name = "roads";
-  return mesh;
+
+  const mat = () => new THREE.MeshLambertMaterial({ vertexColors: true });
+  for (const [geoList, name] of [[geos, "asphalt"], [walkGeos, "sidewalks"], [lineGeos, "centerlines"]] as const) {
+    if (!geoList.length) continue;
+    const merged = mergeGeometries(geoList, false)!;
+    geoList.forEach((g) => g.dispose());
+    const mesh = new THREE.Mesh(merged, mat());
+    mesh.name = name;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  return group;
 }
 
 function buildRails(rails: Rail[]): THREE.Group {
@@ -246,19 +367,16 @@ function buildRails(rails: Rail[]): THREE.Group {
       }
     }
   }
-  if (trackGeos.length) {
-    const m = new THREE.Mesh(mergeGeometries(trackGeos, false)!, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const addMesh = (geos: THREE.BufferGeometry[], cast: boolean) => {
+    if (!geos.length) return;
+    const m = new THREE.Mesh(mergeGeometries(geos, false)!, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    m.castShadow = cast;
+    m.receiveShadow = true;
     group.add(m);
-  }
-  if (deckGeos.length) {
-    const m = new THREE.Mesh(mergeGeometries(deckGeos, false)!, new THREE.MeshLambertMaterial({ vertexColors: true }));
-    group.add(m);
-  }
-  if (pillarGeos.length) {
-    const merged = mergeGeometries(pillarGeos, false)!;
-    const m = new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true }));
-    group.add(m);
-  }
+  };
+  addMesh(trackGeos, false);
+  addMesh(deckGeos, true);
+  addMesh(pillarGeos, true);
   return group;
 }
 
@@ -281,7 +399,9 @@ function buildFlatAreas(areas: Area[], y: number, baseHex: number, varyHue = 0):
   if (!geos.length) return null;
   const merged = mergeGeometries(geos, false)!;
   geos.forEach((g) => g.dispose());
-  return new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const mesh = new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 function buildPlatforms(platforms: { f: Pt[]; el: number }[]): THREE.Mesh | null {
@@ -301,7 +421,10 @@ function buildPlatforms(platforms: { f: Pt[]; el: number }[]): THREE.Mesh | null
   if (!geos.length) return null;
   const merged = mergeGeometries(geos, false)!;
   geos.forEach((g) => g.dispose());
-  return new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const mesh = new THREE.Mesh(merged, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 const LIT_ROADS = new Set(["residential", "pedestrian", "living_street", "tertiary", "secondary", "unclassified", "primary"]);
@@ -358,13 +481,14 @@ export function buildCity(data: CityData): CityMeshes {
   const group = new THREE.Group();
   group.name = "city";
 
-  // ground disc (light, warm — roads read as dark on top of it)
+  // ground disc with subtle noise texture
   const ground = new THREE.Mesh(
     new THREE.CircleGeometry(DISPLAY_RADIUS + 40, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshLambertMaterial({ color: 0xcfcabc }),
+    new THREE.MeshLambertMaterial({ color: 0xcfcabc, map: makeGroundTexture() }),
   );
   ground.name = "ground";
   ground.position.y = -0.02;
+  ground.receiveShadow = true;
   group.add(ground);
 
   const water = buildFlatAreas(data.water, 0.03, 0x7fa8c9);
@@ -377,12 +501,19 @@ export function buildCity(data: CityData): CityMeshes {
   const platforms = buildPlatforms(data.platforms);
   if (platforms) group.add(platforms);
 
-  const { walls, roofs, material: buildingMaterial } = buildBuildings(data.buildings);
-  group.add(walls, roofs);
+  const { meshes, facade, storefront } = buildBuildings(data.buildings);
+  group.add(...meshes);
 
   const lightPositions = computeLightPositions(data.roads);
   const streetLights = buildStreetLights(lightPositions);
   group.add(streetLights);
 
-  return { group, ground, streetLights, lightPositions, buildingMaterial };
+  return {
+    group,
+    ground,
+    streetLights,
+    lightPositions,
+    buildingMaterial: facade,
+    storefrontMaterial: storefront,
+  };
 }

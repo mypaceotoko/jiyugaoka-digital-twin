@@ -149,6 +149,7 @@ export class Simulation {
       c.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
       this.walkerBody.setColorAt(i, c);
     }
+    this.walkerBody.castShadow = true;
     this.walkerBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.walkerHead.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.walkerBody, this.walkerHead);
@@ -178,6 +179,7 @@ export class Simulation {
       c.setHex(CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)]);
       this.carBody.setColorAt(i, c);
     }
+    this.carBody.castShadow = true;
     this.carBody.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.carCabin.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.carBody, this.carCabin);
@@ -233,6 +235,7 @@ export class Simulation {
         this.trainCars.setColorAt(idx++, k % 2 === 0 ? new THREE.Color(0xd4d8dc) : accent.clone().lerp(new THREE.Color(0xd4d8dc), 0.75));
       }
     }
+    this.trainCars.castShadow = true;
     this.trainCars.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.group.add(this.trainCars);
     this.trains.forEach((_t, i) => {
